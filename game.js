@@ -115,7 +115,34 @@ function init() {
       handleAnswer(Number(key) - 1);
     }
   });
-  startGame();
+  waitForVexFlow().then((ready) => {
+    if (!ready) {
+      ui.feedback.textContent =
+        "Notation engine failed to load. Please refresh or check your connection.";
+      ui.lanes.forEach((lane) => (lane.disabled = true));
+      return;
+    }
+    startGame();
+  });
+}
+
+function waitForVexFlow() {
+  let attempts = 0;
+  return new Promise((resolve) => {
+    const check = () => {
+      if (window.VexFlow) {
+        resolve(true);
+        return;
+      }
+      attempts += 1;
+      if (attempts >= 20) {
+        resolve(false);
+        return;
+      }
+      setTimeout(check, 120);
+    };
+    check();
+  });
 }
 
 function startGame() {
@@ -294,7 +321,11 @@ function renderQuestion(question) {
 
 function renderNotation(question) {
   ui.notation.innerHTML = "";
-  const VF = VexFlow;
+  if (!window.VexFlow) {
+    ui.feedback.textContent = "Notation engine missing. Reload to continue.";
+    return;
+  }
+  const VF = window.VexFlow;
   const renderer = new VF.Renderer(ui.notation, VF.Renderer.Backends.SVG);
   const width = ui.notation.clientWidth || 320;
   renderer.resize(width, 170);
