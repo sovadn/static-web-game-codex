@@ -242,8 +242,11 @@ function generateNoteQuestion() {
   const note = randomItem(pool);
   const applied = applyKeySignature(note.letter, keySig);
   const correctName = formatNoteName(applied.letter, applied.accidental);
-  const options = buildNoteOptions(correctName, note.letter, applied.accidental);
-  const correctIndex = options.indexOf(correctName);
+  const { options, optionNoteKeys, correctIndex } = buildNoteOptions({
+    pool,
+    keySig,
+    baseNote: note,
+  });
 
   return {
     id: `q-${questionId++}`,
@@ -253,6 +256,7 @@ function generateNoteQuestion() {
     notes: [note],
     prompt: "Which note is shown?",
     options,
+    optionNoteKeys,
     correctIndex,
     explanation: `Correct: ${correctName} (in ${keySig} major, ${note.letter} is ${
       applied.accidental === "#" ? "sharpened" : applied.accidental === "b" ? "flattened" : "natural"
@@ -260,21 +264,30 @@ function generateNoteQuestion() {
   };
 }
 
-function buildNoteOptions(correctName, baseLetter, accidental) {
-  const options = new Set([correctName]);
-  if (accidental) {
-    options.add(formatNoteName(baseLetter, ""));
-  } else {
-    const fakeAccidental = baseLetter === "B" ? "b" : "#";
-    options.add(formatNoteName(baseLetter, fakeAccidental));
+function buildNoteOptions({ pool, keySig, baseNote }) {
+  const baseIndex = Math.max(0, pool.findIndex((entry) => entry.key === baseNote.key));
+  const indices = [];
+  let step = 0;
+  while (indices.length < 3 && (baseIndex - step >= 0 || baseIndex + step < pool.length)) {
+    if (step === 0) {
+      indices.push(baseIndex);
+    } else {
+      if (baseIndex - step >= 0) indices.push(baseIndex - step);
+      if (indices.length < 3 && baseIndex + step < pool.length) indices.push(baseIndex + step);
+    }
+    step += 1;
   }
-  const baseIndex = letters.indexOf(baseLetter);
-  const adjacentLetter = letters[(baseIndex + 1) % letters.length];
-  options.add(formatNoteName(adjacentLetter, ""));
-  while (options.size < 3) {
-    options.add(formatNoteName(randomItem(letters), ""));
-  }
-  return shuffle(Array.from(options)).slice(0, 3);
+
+  const entries = indices.map((index) => pool[index]).filter(Boolean);
+  const optionEntries = shuffle(entries).slice(0, 3);
+  const optionNoteKeys = optionEntries.map((entry) => entry.key);
+  const options = optionEntries.map((entry) => {
+    const applied = applyKeySignature(entry.letter, keySig);
+    return formatNoteName(applied.letter, applied.accidental);
+  });
+  const correctIndex = optionEntries.findIndex((entry) => entry.key === baseNote.key);
+
+  return { options, optionNoteKeys, correctIndex };
 }
 
 function generateIntervalQuestion() {
@@ -324,15 +337,49 @@ function shuffle(list) {
   return copy;
 }
 
-function setLaneContent(lane, mainText, subText) {
-  lane.innerHTML = "";
-  const main = document.createElement("span");
-  main.className = "lane-main";
-  main.textContent = mainText;
-  const sub = document.createElement("span");
-  sub.className = "lane-sub";
-  sub.textContent = subText;
-  lane.append(main, sub);
+function setLaneLabel(lane, text) {
+  const label = lane.querySelector(".lane-label");
+  if (label) {
+    label.textContent = text;
+  }
+}
+
+function clearLaneNotation(lane) {
+  const container = lane.querySelector(".lane-notation");
+  if (container) {
+    container.innerHTML = "";
+  }
+}
+
+function renderLaneNotation({ containerEl, clef, keySig, noteKey }) {
+  if (!containerEl) return;
+  const VF = getVexFlow();
+  if (!VF) return;
+
+  containerEl.innerHTML = "";
+  const renderer = new VF.Renderer(containerEl, VF.Renderer.Backends.SVG);
+  const width = containerEl.clientWidth || 200;
+  const height = containerEl.clientHeight || 120;
+  renderer.resize(width, height);
+  const context = renderer.getContext();
+  const staffWidth = Math.max(160, Math.min(width - 16, 220));
+  const staffX = Math.max(6, (width - staffWidth) / 2);
+  const staffY = 18;
+  const stave = new VF.Stave(staffX, staffY, staffWidth);
+  stave.addClef(clef).addKeySignature(keySig);
+  stave.setContext(context).draw();
+
+  const note = new VF.StaveNote({ clef, keys: [noteKey], duration: "q" });
+  note.setStave(stave);
+  const voice = new VF.Voice({ num_beats: 1, beat_value: 4 });
+  voice.addTickables([note]);
+  new VF.Formatter().joinVoices([voice]).format([voice], staffWidth - 30);
+  voice.draw(context, stave);
+
+  const svg = containerEl.querySelector("svg");
+  if (svg) {
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  }
 }
 
 function getNextQuestion() {
@@ -359,7 +406,19 @@ function nextQuestion() {
 function renderQuestion(question) {
   ui.prompt.textContent = question.prompt;
   ui.lanes.forEach((lane, index) => {
-    setLaneContent(lane, question.options[index], "Tap to choose");
+    lane.classList.toggle("lane-text-only", question.type !== "NOTE");
+    setLaneLabel(lane, question.options[index]);
+    if (question.type === "NOTE" && question.optionNoteKeys) {
+      const container = lane.querySelector(".lane-notation");
+      renderLaneNotation({
+        containerEl: container,
+        clef: question.clef,
+        keySig: question.keySig,
+        noteKey: question.optionNoteKeys[index],
+      });
+    } else {
+      clearLaneNotation(lane);
+    }
     lane.disabled = false;
   });
   ui.feedback.textContent = "";

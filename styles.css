@@ -141,7 +141,7 @@ main {
 
 .lane {
   width: 100%;
-  padding: 16px;
+  padding: 16px 14px 18px;
   border-radius: 16px;
   border: none;
   background: #1e293b;
@@ -153,21 +153,42 @@ main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
-.lane-main {
-  font-size: 1.65rem;
+.lane-notation {
+  width: 100%;
+  max-width: 240px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 14px;
+  padding: 6px;
+  margin: 10px 12px 6px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.lane-notation svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.lane-label {
+  font-size: 2rem;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
 
-.lane-sub {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: rgba(226, 232, 240, 0.72);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.lane-text-only .lane-notation {
+  display: none;
+}
+
+.lane-text-only .lane-label {
+  font-size: 2rem;
 }
 
 .lane:active {
@@ -217,10 +238,6 @@ main {
     flex: 1;
     font-size: 1.2rem;
   }
-
-  .lane-main {
-    font-size: 1.4rem;
-  }
 }
 
 @media (max-width: 520px) {
@@ -245,5 +262,18 @@ main {
 
   .feedback {
     font-size: 0.9rem;
+  }
+
+  .lane {
+    padding: 14px;
+  }
+
+  .lane-notation {
+    max-width: 220px;
+    height: 120px;
+  }
+
+  .lane-label {
+    font-size: 2.1rem;
   }
 }
