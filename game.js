@@ -10,6 +10,8 @@ const state = {
   inputLocked: false,
 };
 
+window.__gameState = state;
+
 const ui = {
   army: document.getElementById("armyValue"),
   combo: document.getElementById("comboValue"),
