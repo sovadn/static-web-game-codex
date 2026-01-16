@@ -277,3 +277,49 @@ main {
     font-size: 2.1rem;
   }
 }
+
+@media (max-height: 740px) {
+  .app {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .top-bar {
+    padding: 6px 10px;
+  }
+
+  .settings {
+    padding: 0;
+  }
+
+  main {
+    gap: 8px;
+  }
+
+  .notation-card {
+    min-height: 200px;
+  }
+
+  .feedback {
+    min-height: 18px;
+    font-size: 0.85rem;
+  }
+
+  .lanes {
+    gap: 8px;
+  }
+
+  .lane {
+    padding: 12px;
+    gap: 4px;
+  }
+
+  .lane-notation {
+    height: 88px;
+    margin: 8px 8px 4px 8px;
+  }
+
+  .lane-label {
+    font-size: 1.8rem;
+  }
+}
