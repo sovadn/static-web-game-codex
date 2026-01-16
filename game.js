@@ -118,7 +118,7 @@ function init() {
   waitForVexFlow().then((ready) => {
     if (!ready) {
       ui.feedback.textContent =
-        "Notation engine failed to load. Please refresh or check your connection.";
+        "Notation engine failed to load. Please refresh, or disable tracking prevention for this site.";
       ui.lanes.forEach((lane) => (lane.disabled = true));
       return;
     }
@@ -126,20 +126,57 @@ function init() {
   });
 }
 
-function waitForVexFlow() {
+function getVexFlow() {
+  if (window.VexFlow) {
+    return window.VexFlow;
+  }
+  if (window.Vex && window.Vex.Flow) {
+    return window.Vex.Flow;
+  }
+  return null;
+}
+
+function loadVexFlowScript(src) {
+  return new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve(Boolean(getVexFlow()));
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+}
+
+async function waitForVexFlow() {
+  if (getVexFlow()) {
+    return true;
+  }
+  const sources = [
+    "https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/vexflow.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/vexflow/4.2.5/vexflow.min.js",
+    "https://unpkg.com/vexflow@4.2.5/build/vexflow.js",
+  ];
+
+  for (const src of sources) {
+    const loaded = await loadVexFlowScript(src);
+    if (loaded) {
+      return true;
+    }
+  }
+
   let attempts = 0;
   return new Promise((resolve) => {
     const check = () => {
-      if (window.VexFlow) {
+      if (getVexFlow()) {
         resolve(true);
         return;
       }
       attempts += 1;
-      if (attempts >= 20) {
+      if (attempts >= 10) {
         resolve(false);
         return;
       }
-      setTimeout(check, 120);
+      setTimeout(check, 150);
     };
     check();
   });
@@ -321,11 +358,11 @@ function renderQuestion(question) {
 
 function renderNotation(question) {
   ui.notation.innerHTML = "";
-  if (!window.VexFlow) {
+  const VF = getVexFlow();
+  if (!VF) {
     ui.feedback.textContent = "Notation engine missing. Reload to continue.";
     return;
   }
-  const VF = window.VexFlow;
   const renderer = new VF.Renderer(ui.notation, VF.Renderer.Backends.SVG);
   const width = ui.notation.clientWidth || 320;
   renderer.resize(width, 170);
