@@ -1,4 +1,4 @@
-const state = {
+﻿const state = {
   army: 10,
   combo: 0,
   level: 1,
@@ -24,7 +24,6 @@ const ui = {
   feedback: document.getElementById("feedback"),
   lanes: Array.from(document.querySelectorAll(".lane")),
   restart: document.getElementById("restartButton"),
-  useH: document.getElementById("useH"),
 };
 
 const keySignatures = {
@@ -154,9 +153,9 @@ async function waitForVexFlow() {
     return true;
   }
   const sources = [
-    "https://cdn.jsdelivr.net/npm/vexflow@4.2.5/build/vexflow.js",
-    "https://cdnjs.cloudflare.com/ajax/libs/vexflow/4.2.5/vexflow.min.js",
-    "https://unpkg.com/vexflow@4.2.5/build/vexflow.js",
+    "./vendor/vexflow-min.js",
+    "https://unpkg.com/vexflow@4.2.5/releases/vexflow-min.js",
+    "https://cdn.jsdelivr.net/npm/vexflow@4.2.5/releases/vexflow-min.js",
   ];
 
   for (const src of sources) {
@@ -222,13 +221,12 @@ function applyKeySignature(letter, keySig) {
 }
 
 function formatNoteName(letter, accidental) {
-  const useH = ui.useH.checked;
-  const accidentalSymbol = accidental === "#" ? "♯" : accidental === "b" ? "♭" : "";
-  if (letter === "B" && !accidental && useH) {
-    return "H";
-  }
-  if (letter === "B" && accidental === "b") {
-    return `B${accidentalSymbol}`;
+  const accidentalSymbol = accidental === "#" ? "サ_" : accidental === "b" ? "サ-" : "";
+  if (letter === "B") {
+    if (accidental === "b") {
+      return `B${accidentalSymbol}`;
+    }
+    return `H${accidentalSymbol}`;
   }
   return `${letter}${accidentalSymbol}`;
 }
@@ -476,3 +474,7 @@ function endGame() {
 }
 
 init();
+
+
+
+
