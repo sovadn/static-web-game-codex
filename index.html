@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tri Trake: Nota &amp; Predznak</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div class="app">
+    <header class="top-bar">
+      <div class="stat">
+        <span class="label">Army</span>
+        <span id="armyValue" class="value">10</span>
+      </div>
+      <div class="stat">
+        <span class="label">Combo</span>
+        <span id="comboValue" class="value">0</span>
+      </div>
+      <div id="bossStat" class="stat boss hidden">
+        <span class="label">Boss HP</span>
+        <span id="bossValue" class="value">30</span>
+      </div>
+      <div class="stat">
+        <span class="label">Level</span>
+        <span id="levelValue" class="value">1</span>
+      </div>
+    </header>
+
+    <section class="settings">
+      <label class="toggle">
+        <input type="checkbox" id="useH" />
+        <span>Use H instead of B</span>
+      </label>
+      <div id="promptText" class="prompt">Which note is shown?</div>
+    </section>
+
+    <main>
+      <div id="notationCard" class="notation-card">
+        <div id="notation" class="notation"></div>
+      </div>
+      <div id="feedback" class="feedback">Ready!</div>
+    </main>
+
+    <section class="lanes" aria-label="Answer lanes">
+      <button class="lane" data-index="0">A</button>
+      <button class="lane" data-index="1">B</button>
+      <button class="lane" data-index="2">C</button>
+    </section>
+
+    <button id="restartButton" class="restart hidden">Restart Game</button>
+  </div>
+
+  <script src="game.js"></script>
+
+  <!--
+    README
+    - Run locally: open index.html in your browser.
+    - Deploy on GitHub Pages: Settings -> Pages -> deploy from main branch / root.
+  -->
+</body>
+</html>
