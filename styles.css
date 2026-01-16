@@ -97,14 +97,14 @@ main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .notation-card {
   background: var(--panel);
   border-radius: 20px;
   padding: 8px 12px;
-  min-height: 200px;
+  min-height: 220px;
   box-shadow: var(--shadow);
   display: flex;
   align-items: center;
@@ -136,7 +136,7 @@ main {
 .lanes {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .lane {
@@ -146,10 +146,28 @@ main {
   border: none;
   background: #1e293b;
   color: #f8fafc;
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   font-weight: 700;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.35);
   transition: transform 0.1s ease, background 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.lane-main {
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.lane-sub {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.72);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .lane:active {
@@ -198,5 +216,34 @@ main {
   .lane {
     flex: 1;
     font-size: 1.2rem;
+  }
+
+  .lane-main {
+    font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .app {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .top-bar {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .settings {
+    padding: 2px 0;
+  }
+
+  .notation-card {
+    padding: 6px 10px;
+    min-height: 260px;
+  }
+
+  .feedback {
+    font-size: 0.9rem;
   }
 }

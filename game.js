@@ -324,6 +324,17 @@ function shuffle(list) {
   return copy;
 }
 
+function setLaneContent(lane, mainText, subText) {
+  lane.innerHTML = "";
+  const main = document.createElement("span");
+  main.className = "lane-main";
+  main.textContent = mainText;
+  const sub = document.createElement("span");
+  sub.className = "lane-sub";
+  sub.textContent = subText;
+  lane.append(main, sub);
+}
+
 function getNextQuestion() {
   state.retryQueue.forEach((entry) => {
     entry.dueIn -= 1;
@@ -348,7 +359,7 @@ function nextQuestion() {
 function renderQuestion(question) {
   ui.prompt.textContent = question.prompt;
   ui.lanes.forEach((lane, index) => {
-    lane.textContent = question.options[index];
+    setLaneContent(lane, question.options[index], "Tap to choose");
     lane.disabled = false;
   });
   ui.feedback.textContent = "";
@@ -364,10 +375,23 @@ function renderNotation(question) {
     return;
   }
   const renderer = new VF.Renderer(ui.notation, VF.Renderer.Backends.SVG);
-  const width = ui.notation.clientWidth || 320;
-  renderer.resize(width, 170);
+  // Scale and shorten the staff on small screens for legibility and reduced eye travel.
+  const isMobile = window.innerWidth <= 600;
+  const cardWidth = ui.notationCard.clientWidth || ui.notation.clientWidth || 320;
+  const targetWidth = cardWidth;
+  const targetHeight = isMobile ? 260 : 220;
+  const scale = isMobile ? 1.6 : 1.45;
+  renderer.resize(targetWidth, targetHeight);
   const context = renderer.getContext();
-  const stave = new VF.Stave(8, 40, width - 16);
+  context.scale(scale, scale);
+  const scaledWidth = targetWidth / scale;
+  const scaledHeight = targetHeight / scale;
+  const staffWidth = isMobile
+    ? Math.max(180, Math.min(220, scaledWidth - 20))
+    : Math.max(220, Math.min(340, scaledWidth - 24));
+  const staffX = Math.max(8, (scaledWidth - staffWidth) / 2);
+  const staffY = Math.max(26, (scaledHeight - 90) / 2);
+  const stave = new VF.Stave(staffX, staffY, staffWidth);
   stave.addClef(question.clef).addKeySignature(question.keySig);
   stave.setContext(context).draw();
 
@@ -383,10 +407,28 @@ function renderNotation(question) {
       }),
     ];
   }
+  notes.forEach((note) => note.setStave(stave));
 
   const voice = new VF.Voice({ num_beats: 1, beat_value: 4 });
   voice.addTickables(notes);
-  new VF.Formatter().joinVoices([voice]).format([voice], width - 50);
+  const formatterWidth = Math.max(120, staffWidth - 40);
+  new VF.Formatter().joinVoices([voice]).format([voice], formatterWidth);
+
+  // Soft halo around noteheads to help the eye lock onto the target quickly.
+  notes.forEach((note) => {
+    const ys = note.getYs();
+    const x = note.getAbsoluteX();
+    if (!ys || !ys.length) return;
+    context.save();
+    context.setFillStyle("rgba(79, 70, 229, 0.18)");
+    ys.forEach((y) => {
+      context.beginPath();
+      context.arc(x, y, 12, 0, Math.PI * 2);
+      context.fill();
+    });
+    context.restore();
+  });
+
   voice.draw(context, stave);
 }
 
