@@ -221,7 +221,7 @@ function applyKeySignature(letter, keySig) {
 }
 
 function formatNoteName(letter, accidental) {
-  const accidentalSymbol = accidental === "#" ? "サ_" : accidental === "b" ? "サ-" : "";
+  const accidentalSymbol = accidental === "#" ? "\u266F" : accidental === "b" ? "\u266D" : "";
   if (letter === "B") {
     if (accidental === "b") {
       return `B${accidentalSymbol}`;
@@ -474,6 +474,7 @@ function endGame() {
 }
 
 init();
+
 
 
 
