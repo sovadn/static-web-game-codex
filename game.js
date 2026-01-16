@@ -420,13 +420,17 @@ function renderLaneNotation({ containerEl, clef, keySig, noteKey }) {
 
   containerEl.innerHTML = "";
   const renderer = new VF.Renderer(containerEl, VF.Renderer.Backends.SVG);
-  const width = containerEl.clientWidth || 200;
-  const height = containerEl.clientHeight || 120;
+  const width = containerEl.clientWidth || 220;
+  const height = containerEl.clientHeight || 130;
   renderer.resize(width, height);
   const context = renderer.getContext();
-  const staffWidth = Math.max(160, Math.min(width - 16, 220));
-  const staffX = Math.max(6, (width - staffWidth) / 2);
-  const staffY = 18;
+  const scale = 0.84;
+  context.scale(scale, scale);
+  const scaledWidth = width / scale;
+  const scaledHeight = height / scale;
+  const staffWidth = Math.max(180, Math.min(scaledWidth - 24, 240));
+  const staffX = Math.max(12, (scaledWidth - staffWidth) / 2);
+  const staffY = Math.max(32, (scaledHeight - 90) / 2 + 12);
   const stave = new VF.Stave(staffX, staffY, staffWidth);
   stave.addClef(clef).addKeySignature(keySig);
   stave.setContext(context).draw();
@@ -441,6 +445,7 @@ function renderLaneNotation({ containerEl, clef, keySig, noteKey }) {
   const svg = containerEl.querySelector("svg");
   if (svg) {
     svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   }
 }
 
