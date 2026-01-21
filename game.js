@@ -9,6 +9,7 @@
   retryQueue: [],
   inputLocked: false,
   mode: "quiz",
+  feedbackTimer: null,
 };
 
 window.__gameState = state;
@@ -710,12 +711,18 @@ function handleAnswer(index) {
     ? state.currentQuestion.explanation
     : `Wrong. ${state.currentQuestion.explanation}`;
   ui.feedback.textContent = feedbackText;
+  if (state.feedbackTimer) {
+    clearTimeout(state.feedbackTimer);
+    state.feedbackTimer = null;
+  }
   ui.notationCard.classList.remove("correct", "wrong");
+  void ui.notationCard.offsetWidth;
   ui.notationCard.classList.add(correct ? "correct" : "wrong");
 
-  setTimeout(() => {
+  state.feedbackTimer = setTimeout(() => {
     ui.notationCard.classList.remove("correct", "wrong");
-  }, 400);
+    state.feedbackTimer = null;
+  }, 550);
 
   state.questionCount += 1;
   if (!state.bossActive && state.questionCount % 12 === 0) {
