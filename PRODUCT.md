@@ -27,6 +27,31 @@ Igra nudi dva moda:
 - “Army/Combo/Level” metrika kao motivacijski UI element.
 - Lokalni prikaz nota pomoću VexFlow (offline fallback u `vendor/`).
 
+## Proširenja sadržaja i pitanja (zahtjevi)
+- Pitanja za prepoznavanje nota u bas ključu, uz postojeća pitanja za violinski ključ.
+- Pitanja tipa “koji je ovo interval?” (osnovna razina: sekunda, terca, kvarta, kvinta).
+- Naprednija intervalna pitanja: mala/velika sekunda, mala/velika terca, itd.
+- Pitanja za prepoznavanje trozvuka (npr. C dur, A mol).
+- Pitanja za prepoznavanje tonaliteta prema predznacima, uz posebnu logiku za razliku između dura i njegovog paralelnog mola (isti predznaci).
+- Sva navedena pitanja mogu se pojaviti i u formi Quiz i u formi Rosetta Stone.
+
+## Napredak i odabir gradiva (prijedlog)
+### Cilj
+Omogućiti igraču jasan uvid u to koje gradivo je savladao, a koje zahtijeva dodatnu vježbu, uz mogućnost ručnog odabira gradiva.
+
+### Prijedlog rješenja
+- **Mapa gradiva po temama**: Note, Intervali, Trozvuci, Tonaliteti (svaka tema ima status: zaključano / u tijeku / savladano).
+- **Moduli s postotkom uspješnosti**: prikaz točnosti na zadnjih 20 pitanja po temi.
+- **Filter prije igre**: odabir teme, razine (osnovno/napredno), ključa (violinski/bas) i moda (Quiz/Rosetta).
+- **Review lista**: prikaz tema s najvećim brojem pogrešaka kao preporuka za ponavljanje.
+
+### Kriteriji “savladano”
+- Tema se smatra savladanom kada korisnik postigne npr. 85% točnosti na zadnjih 20 pitanja u toj temi.
+- Status se ažurira automatski nakon svakog odgovora.
+
+### Evidencija i pohrana
+- Evidencija napretka se sprema lokalno (npr. localStorage) uz mogućnost kasnijeg proširenja na korisničke profile.
+
 ## UX i vizualni smjer
 Vizualni stil je čist, fokusiran i “game-like”, s naglaskom na:
 - tamnu pozadinu radi kontrasta,

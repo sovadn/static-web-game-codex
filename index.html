@@ -4,44 +4,46 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tri Trake: Nota &amp; Predznak</title>
-  <link rel="stylesheet" href="styles.css?v=9" />
+  <link rel="stylesheet" href="styles.css?v=13" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
   <div class="app">
     <header class="top-bar">
-      <div class="stat">
-        <span class="label">Army</span>
-        <span id="armyValue" class="value">10</span>
-      </div>
-      <div class="stat">
-        <span class="label">Combo</span>
-        <span id="comboValue" class="value">0</span>
-      </div>
-      <div id="bossStat" class="stat boss hidden">
-        <span class="label">Boss HP</span>
-        <span id="bossValue" class="value">30</span>
-      </div>
-      <div class="stat">
-        <span class="label">Level</span>
-        <span id="levelValue" class="value">1</span>
-      </div>
+      <div class="brand">Solffeggio</div>
+      <div id="testStatus" class="test-status">Test: -</div>
     </header>
 
     <section class="settings">
-      <div class="mode-switch" role="tablist" aria-label="Game mode">
-        <button id="quizMode" class="mode-button active" type="button" role="tab" aria-selected="true">
-          Quiz
-        </button>
-        <button
-          id="rosettaMode"
-          class="mode-button"
-          type="button"
-          role="tab"
-          aria-selected="false"
-        >
-          Rosetta Stone
-        </button>
+      <div class="mode-row">
+        <div class="mode-switch" role="tablist" aria-label="Game mode">
+          <button id="quizMode" class="mode-button active" type="button" role="tab" aria-selected="true">
+            Quiz
+          </button>
+          <button
+            id="rosettaMode"
+            class="mode-button"
+            type="button"
+            role="tab"
+            aria-selected="false"
+          >
+            Rosetta Stone
+          </button>
+        </div>
+        <button id="testToggle" class="mode-button ghost" type="button">Testovi</button>
+      </div>
+      <div id="testPanel" class="curriculum hidden" aria-label="Tests">
+        <div class="curriculum-section">
+          <div class="panel-header">
+            <div class="section-title">Testovi</div>
+            <button id="testBack" class="mode-button ghost small" type="button">Natrag</button>
+          </div>
+          <div id="testList" class="test-list"></div>
+        </div>
+      </div>
+      <div class="test-progress">
+        <div id="questionProgress" class="progress-pill">Pitanje 0/10</div>
+        <div id="scoreProgress" class="progress-pill">Točno 0/10</div>
       </div>
       <div id="promptText" class="prompt">Which note is shown?</div>
     </section>
@@ -71,10 +73,10 @@
       <div id="feedback" class="feedback">Ready!</div>
     </main>
 
-    <button id="restartButton" class="restart hidden">Restart Game</button>
+    <button id="restartButton" class="restart hidden">Ponovi test</button>
   </div>
 
-  <script src="game.js?v=7"></script>
+  <script src="game.js?v=23"></script>
 
   <!--
     README
