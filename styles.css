@@ -353,7 +353,7 @@ body::after {
 }
 
 .prompt {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.01em;
 }
@@ -411,7 +411,7 @@ main {
   border: none;
   background: linear-gradient(135deg, #1b2536, #172034);
   color: #f8fafc;
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   font-weight: 700;
   box-shadow: 0 10px 26px rgba(6, 12, 24, 0.35);
   transition: transform 0.1s ease, background 0.2s ease;
@@ -447,7 +447,7 @@ main {
 }
 
 .lane-label {
-  font-size: 2rem;
+  font-size: 1.45rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   order: 1;
@@ -461,7 +461,7 @@ main {
 }
 
 .lane-text-only .lane-label {
-  font-size: 2rem;
+  font-size: 1.45rem;
 }
 
 .lane-label-hidden .lane-label {
@@ -483,6 +483,10 @@ main {
 
 .mode-rosetta .notation-card {
   display: none;
+}
+
+.theory-only .notation-card {
+  display: none !important;
 }
 
 .mode-rosetta .lanes {
@@ -601,6 +605,10 @@ main {
     padding: 2px 0;
   }
 
+  .prompt {
+    font-size: 1.05rem;
+  }
+
   .notation-card {
     padding: 6px 10px;
     min-height: 220px;
@@ -613,6 +621,7 @@ main {
   .lane {
     padding: 10px 12px;
     gap: 10px;
+    font-size: 1.4rem;
   }
 
   .lane-notation {
@@ -627,7 +636,7 @@ main {
   }
 
   .lane-label {
-    font-size: 1.7rem;
+    font-size: 1.3rem;
   }
 }
 
@@ -694,6 +703,6 @@ main {
   }
 
   .lane-label {
-    font-size: 1.55rem;
+    font-size: 1.25rem;
   }
 }

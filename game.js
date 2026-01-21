@@ -167,10 +167,14 @@ function startTest(testId) {
   state.correctCount = 0;
   state.testActive = true;
   state.inputLocked = false;
+  if (!isRosettaAllowed()) {
+    state.mode = "quiz";
+  }
   document.body.classList.remove("show-tests");
   if (ui.testPanel) ui.testPanel.classList.add("hidden");
   ui.restart.textContent = "Ponovi test";
   ui.restart.classList.add("hidden");
+  updateModeUi(state.mode);
   updateTestStatus();
   updateTestListUi();
   ui.feedback.textContent = "";
@@ -192,19 +196,33 @@ function finishTest() {
 
 function updateModeUi(mode) {
   if (!ui.quizMode || !ui.rosettaMode) return;
+  const rosettaAllowed = isRosettaAllowed();
+  if (!rosettaAllowed && mode === "rosettaStone") {
+    state.mode = "quiz";
+    mode = "quiz";
+  }
   ui.quizMode.classList.toggle("active", mode === "quiz");
   ui.rosettaMode.classList.toggle("active", mode === "rosettaStone");
   ui.quizMode.setAttribute("aria-selected", String(mode === "quiz"));
   ui.rosettaMode.setAttribute("aria-selected", String(mode === "rosettaStone"));
+  ui.rosettaMode.disabled = !rosettaAllowed;
+  ui.rosettaMode.setAttribute("aria-disabled", String(!rosettaAllowed));
+  if (!rosettaAllowed) ui.rosettaMode.classList.remove("active");
 }
 
 function switchMode(mode) {
+  if (mode === "rosettaStone" && !isRosettaAllowed()) return;
   state.mode = mode;
   updateModeUi(mode);
   state.inputLocked = false;
   if (state.testActive) {
     renderQuestion(state.currentQuestion);
   }
+}
+
+function isRosettaAllowed() {
+  const test = getTestById(state.currentTestId);
+  return test ? test.topic === "note" : false;
 }
 
 function init() {
@@ -417,6 +435,9 @@ function renderQuestion(question) {
   ui.prompt.textContent = question.prompt;
   document.body.classList.toggle("mode-rosetta", question.mode === "ROSETTA");
   document.body.classList.toggle("mode-quiz", question.mode === "QUIZ");
+  const hideNotation = question.type === "THEORY";
+  document.body.classList.toggle("theory-only", hideNotation);
+  ui.notationCard.classList.toggle("hidden", hideNotation);
   ui.lanes.forEach((lane, index) => {
     if (question.mode === "QUIZ" && index >= QUIZ_OPTION_COUNT) {
       lane.style.display = "none";
@@ -451,7 +472,9 @@ function renderQuestion(question) {
     lane.disabled = false;
   });
   ui.feedback.textContent = "";
-  if (question.mode !== "ROSETTA") {
+  if (hideNotation) {
+    ui.notation.innerHTML = "";
+  } else if (question.mode !== "ROSETTA") {
     renderNotation(question);
   } else {
     ui.notation.innerHTML = "";
@@ -487,48 +510,30 @@ function renderNotation(question) {
   stave.setContext(context).draw();
 
   let notes;
-  if (question.type === "KEY") {
+  if (question.type === "KEY" || !question.notes || question.notes.length === 0) {
     notes = [];
-  } else if (question.type === "NOTE") {
-    notes = [new VF.StaveNote({ clef: question.clef, keys: [question.notes[0].key], duration: "q" })];
-  } else if (question.type === "INTERVAL") {
-    notes = [
-      new VF.StaveNote({
-        clef: question.clef,
-        keys: [question.notes[0].key, question.notes[1].key],
-        duration: "q",
-      }),
-    ];
-  } else if (question.type === "MINOR_MODE") {
-    if (!question.notes || question.notes.length === 0) {
-      notes = [];
-    } else {
-      notes = [
-        new VF.StaveNote({
-          clef: question.clef,
-          keys: question.notes.map((note) => note.key),
-          duration: "q",
-        }),
-      ];
-    }
   } else {
-    notes = [
-      new VF.StaveNote({
-        clef: question.clef,
-        keys: question.notes.map((note) => note.key),
-        duration: "q",
-      }),
-    ];
+    const { keys, accidentals } = buildKeysWithAccidentals(question);
+    const staveNote = new VF.StaveNote({
+      clef: question.clef,
+      keys,
+      duration: "q",
+    });
+    if (accidentals && accidentals.length) {
+      accidentals.forEach((accidental, index) => {
+        if (!accidental) return;
+        if (typeof staveNote.addAccidental === "function") {
+          const acc = buildAccidental(VF, accidental);
+          if (acc) staveNote.addAccidental(index, acc);
+          return;
+        }
+        const modifier = buildAccidental(VF, accidental);
+        if (modifier) staveNote.addModifier(modifier, index);
+      });
+    }
+    notes = [staveNote];
   }
   notes.forEach((note) => note.setStave(stave));
-
-  if (question.accidentals && notes[0]) {
-    question.accidentals.forEach((accidental, index) => {
-      if (accidental) {
-        notes[0].addModifier(new VF.Accidental(accidental), index);
-      }
-    });
-  }
 
   if (notes.length > 0) {
     const voice = new VF.Voice({ num_beats: 1, beat_value: 4 });
@@ -552,6 +557,40 @@ function renderNotation(question) {
 
     voice.draw(context, stave);
   }
+}
+
+function buildAccidental(VF, accidental) {
+  if (VF && typeof VF.Accidental === "function") {
+    const acc = new VF.Accidental(accidental);
+    if (acc && typeof acc.setNote === "function") return acc;
+  }
+  if (window.Vex && window.Vex.Flow && typeof window.Vex.Flow.Accidental === "function") {
+    const acc = new window.Vex.Flow.Accidental(accidental);
+    if (acc && typeof acc.setNote === "function") return acc;
+  }
+  return null;
+}
+
+function buildKeysWithAccidentals(question) {
+  const keys = question.notes.map((note) => note.key);
+  const accidentals = Array.isArray(question.accidentals) ? [...question.accidentals] : [];
+  if (keys.length <= 1) return { keys, accidentals };
+  const paired = keys.map((key, index) => ({
+    key,
+    accidental: accidentals[index] || null,
+    midi: noteKeyToMidi(key),
+    index,
+  }));
+  paired.sort((a, b) => {
+    if (a.midi === null && b.midi === null) return a.index - b.index;
+    if (a.midi === null) return 1;
+    if (b.midi === null) return -1;
+    return a.midi - b.midi;
+  });
+  return {
+    keys: paired.map((item) => item.key),
+    accidentals: paired.map((item) => item.accidental),
+  };
 }
 
 function handleAnswer(index) {

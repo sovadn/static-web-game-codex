@@ -271,10 +271,30 @@ function buildTriadNotes(rootKey, quality) {
     return null;
   }
   const accidentalForDelta = (delta) => (delta === 1 ? "#" : delta === -1 ? "b" : null);
-  return {
-    keys: [rootKey, thirdKey, fifthKey],
-    accidentals: [null, accidentalForDelta(thirdDelta), accidentalForDelta(fifthDelta)],
+  const downOctave = (key) => {
+    const [letterPart, octavePart] = String(key).split("/");
+    const octaveNum = Number(octavePart);
+    if (Number.isNaN(octaveNum)) return key;
+    return `${letterPart}/${octaveNum - 1}`;
   };
+  const voicing = Math.floor(Math.random() * 3);
+  let keys;
+  let accidentals;
+  if (voicing === 1) {
+    const fifthDown = downOctave(fifthKey);
+    keys = [rootKey, thirdKey, fifthDown];
+    accidentals = [null, accidentalForDelta(thirdDelta), accidentalForDelta(fifthDelta)];
+  } else if (voicing === 2) {
+    const thirdDown = downOctave(thirdKey);
+    const fifthDown = downOctave(fifthKey);
+    keys = [rootKey, thirdDown, fifthDown];
+    accidentals = [null, accidentalForDelta(thirdDelta), accidentalForDelta(fifthDelta)];
+  } else {
+    keys = [rootKey, thirdKey, fifthKey];
+    accidentals = [null, accidentalForDelta(thirdDelta), accidentalForDelta(fifthDelta)];
+  }
+
+  return { keys, accidentals };
 }
 
 function generateTriadQuestion(test) {
@@ -441,8 +461,15 @@ function generateTonalityQuestion(test) {
   const keySig = randomItem(keyPool);
   const tonal = TONALITY_MAP[keySig] || TONALITY_MAP.C;
   const askMajor = Math.random() < 0.5;
-  const options = shuffle([tonal.major, tonal.minor]);
+  const majors = keyPool.map((key) => (TONALITY_MAP[key] || TONALITY_MAP.C).major);
+  const minors = keyPool.map((key) => (TONALITY_MAP[key] || TONALITY_MAP.C).minor);
+  const pool = askMajor ? majors : minors;
   const correctLabel = askMajor ? tonal.major : tonal.minor;
+  const optionsSet = new Set([correctLabel]);
+  while (optionsSet.size < QUIZ_OPTION_COUNT && optionsSet.size < pool.length) {
+    optionsSet.add(randomItem(pool));
+  }
+  const options = shuffle(Array.from(optionsSet));
   const correctIndex = options.indexOf(correctLabel);
 
   return {
@@ -453,7 +480,7 @@ function generateTonalityQuestion(test) {
     clef: "treble",
     keySig,
     notes: [],
-    prompt: askMajor ? "Koji je dur?" : "Koji je paralelni mol?",
+    prompt: askMajor ? "Koji je dur?" : "Koji je mol?",
     options,
     correctIndex,
     explanation: `Correct: ${correctLabel}.`,
@@ -470,8 +497,15 @@ function generateParallelQuestion(test) {
   const prompt = askMinor
     ? `Koji je paralelni mol od ${tonal.major}?`
     : `Koji je paralelni dur od ${tonal.minor}?`;
-  const options = shuffle([tonal.major, tonal.minor]);
+  const majors = keyPool.map((key) => (TONALITY_MAP[key] || TONALITY_MAP.C).major);
+  const minors = keyPool.map((key) => (TONALITY_MAP[key] || TONALITY_MAP.C).minor);
+  const pool = askMinor ? minors : majors;
   const correctLabel = askMinor ? tonal.minor : tonal.major;
+  const optionsSet = new Set([correctLabel]);
+  while (optionsSet.size < QUIZ_OPTION_COUNT && optionsSet.size < pool.length) {
+    optionsSet.add(randomItem(pool));
+  }
+  const options = shuffle(Array.from(optionsSet));
   const correctIndex = options.indexOf(correctLabel);
 
   return {
