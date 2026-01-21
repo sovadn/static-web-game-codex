@@ -8,6 +8,7 @@
   currentQuestion: null,
   retryQueue: [],
   inputLocked: false,
+  mode: "quiz",
 };
 
 window.__gameState = state;
@@ -24,6 +25,8 @@ const ui = {
   feedback: document.getElementById("feedback"),
   lanes: Array.from(document.querySelectorAll(".lane")),
   restart: document.getElementById("restartButton"),
+  quizMode: document.getElementById("quizMode"),
+  rosettaMode: document.getElementById("rosettaMode"),
 };
 
 const keySignatures = {
@@ -103,17 +106,25 @@ const keyPoolByLevel = {
 };
 
 let questionId = 0;
+const QUIZ_OPTION_COUNT = 3;
+const ROSETTA_OPTION_COUNT = 4;
 
 function init() {
   ui.lanes.forEach((lane) => {
     lane.addEventListener("click", () => handleAnswer(Number(lane.dataset.index)));
   });
+  if (ui.quizMode && ui.rosettaMode) {
+    ui.quizMode.addEventListener("click", () => switchMode("quiz"));
+    ui.rosettaMode.addEventListener("click", () => switchMode("rosettaStone"));
+  }
   ui.restart.addEventListener("click", restartGame);
   document.addEventListener("keydown", (event) => {
     if (state.inputLocked) return;
     const key = event.key;
     if (key === "1" || key === "2" || key === "3") {
       handleAnswer(Number(key) - 1);
+    } else if (key === "4" && state.mode === "rosettaStone") {
+      handleAnswer(3);
     }
   });
   waitForVexFlow().then((ready) => {
@@ -193,6 +204,7 @@ function startGame() {
   state.retryQueue = [];
   state.inputLocked = false;
   ui.restart.classList.add("hidden");
+  updateModeUi(state.mode);
   updateStats();
   nextQuestion();
 }
@@ -210,6 +222,22 @@ function updateStats() {
   ui.bossStat.classList.toggle("hidden", !state.bossActive);
 }
 
+function updateModeUi(mode) {
+  if (!ui.quizMode || !ui.rosettaMode) return;
+  ui.quizMode.classList.toggle("active", mode === "quiz");
+  ui.rosettaMode.classList.toggle("active", mode === "rosettaStone");
+  ui.quizMode.setAttribute("aria-selected", String(mode === "quiz"));
+  ui.rosettaMode.setAttribute("aria-selected", String(mode === "rosettaStone"));
+}
+
+function switchMode(mode) {
+  state.mode = mode;
+  updateModeUi(mode);
+  state.retryQueue = [];
+  state.inputLocked = false;
+  nextQuestion();
+}
+
 function getPool(clef) {
   const levelKey = state.level === 1 ? "level1" : "level2";
   return notePools[clef][levelKey];
@@ -220,15 +248,33 @@ function applyKeySignature(letter, keySig) {
   return { letter, accidental };
 }
 
-function formatNoteName(letter, accidental) {
+function formatNoteName(letter, accidental, lowercase = false) {
   const accidentalSymbol = accidental === "#" ? "\u266F" : accidental === "b" ? "\u266D" : "";
+  let baseLetter = letter;
   if (letter === "B") {
-    if (accidental === "b") {
-      return `B${accidentalSymbol}`;
-    }
-    return `H${accidentalSymbol}`;
+    baseLetter = accidental === "b" ? "B" : "H";
   }
-  return `${letter}${accidentalSymbol}`;
+  if (lowercase) {
+    baseLetter = baseLetter.toLowerCase();
+  }
+  return `${baseLetter}${accidentalSymbol}`;
+}
+
+function formatNoteLabel(noteKey, keySig, clef, options = {}) {
+  const [rawLetter, rawOctave] = String(noteKey).split("/");
+  const letter = rawLetter ? rawLetter.toUpperCase() : "";
+  const applied = applyKeySignature(letter, keySig);
+  const label = formatNoteName(applied.letter, applied.accidental, options.lowercase);
+  if (options.includeOctave === false) {
+    return label;
+  }
+  const octaveValue = Number(rawOctave);
+  let solfegeOctave = octaveValue;
+  if (!Number.isNaN(octaveValue)) {
+    if (clef === "treble") solfegeOctave = octaveValue - 3;
+    if (clef === "bass") solfegeOctave = octaveValue - 1;
+  }
+  return `${label}${Number.isNaN(solfegeOctave) ? "" : solfegeOctave}`;
 }
 
 function randomItem(list) {
@@ -241,21 +287,26 @@ function generateNoteQuestion() {
   const pool = getPool(clef);
   const note = randomItem(pool);
   const applied = applyKeySignature(note.letter, keySig);
-  const correctName = formatNoteName(applied.letter, applied.accidental);
-  const { options, optionNoteKeys, correctIndex } = buildNoteOptions({
+  const correctName = formatNoteLabel(note.key, keySig, clef, { lowercase: true });
+  const { optionNoteKeys, correctIndex } = buildNoteOptions({
     pool,
     keySig,
     baseNote: note,
+    count: QUIZ_OPTION_COUNT,
   });
+  const optionLabels = optionNoteKeys.map((noteKey) =>
+    formatNoteLabel(noteKey, keySig, clef, { lowercase: true })
+  );
 
   return {
     id: `q-${questionId++}`,
     type: "NOTE",
+    mode: "QUIZ",
     clef,
     keySig,
     notes: [note],
     prompt: "Which note is shown?",
-    options,
+    options: optionLabels,
     optionNoteKeys,
     correctIndex,
     explanation: `Correct: ${correctName} (in ${keySig} major, ${note.letter} is ${
@@ -264,22 +315,23 @@ function generateNoteQuestion() {
   };
 }
 
-function buildNoteOptions({ pool, keySig, baseNote }) {
+function buildNoteOptions({ pool, keySig, baseNote, count }) {
+  const optionCount = Math.max(2, Math.min(4, Number(count) || QUIZ_OPTION_COUNT));
   const baseIndex = Math.max(0, pool.findIndex((entry) => entry.key === baseNote.key));
   const indices = [];
   let step = 0;
-  while (indices.length < 3 && (baseIndex - step >= 0 || baseIndex + step < pool.length)) {
+  while (indices.length < optionCount && (baseIndex - step >= 0 || baseIndex + step < pool.length)) {
     if (step === 0) {
       indices.push(baseIndex);
     } else {
       if (baseIndex - step >= 0) indices.push(baseIndex - step);
-      if (indices.length < 3 && baseIndex + step < pool.length) indices.push(baseIndex + step);
+      if (indices.length < optionCount && baseIndex + step < pool.length) indices.push(baseIndex + step);
     }
     step += 1;
   }
 
   const entries = indices.map((index) => pool[index]).filter(Boolean);
-  const optionEntries = shuffle(entries).slice(0, 3);
+  const optionEntries = shuffle(entries).slice(0, optionCount);
   const optionNoteKeys = optionEntries.map((entry) => entry.key);
   const options = optionEntries.map((entry) => {
     const applied = applyKeySignature(entry.letter, keySig);
@@ -288,6 +340,37 @@ function buildNoteOptions({ pool, keySig, baseNote }) {
   const correctIndex = optionEntries.findIndex((entry) => entry.key === baseNote.key);
 
   return { options, optionNoteKeys, correctIndex };
+}
+
+function generateRosettaQuestion() {
+  const clef = state.level === 1 ? "treble" : Math.random() < 0.55 ? "treble" : "bass";
+  const keySig = randomItem(keyPoolByLevel[state.level]);
+  const pool = getPool(clef);
+  const note = randomItem(pool);
+  const { options, optionNoteKeys, correctIndex } = buildNoteOptions({
+    pool,
+    keySig,
+    baseNote: note,
+    count: ROSETTA_OPTION_COUNT,
+  });
+  const noteLabel = formatNoteLabel(note.key, keySig, clef, { lowercase: true });
+  const optionLabels = optionNoteKeys.map((noteKey) =>
+    formatNoteLabel(noteKey, keySig, clef, { lowercase: true })
+  );
+
+  return {
+    id: `q-${questionId++}`,
+    type: "NOTE",
+    mode: "ROSETTA",
+    clef,
+    keySig,
+    notes: [note],
+    prompt: `Show note ${noteLabel}`,
+    options: optionLabels,
+    optionNoteKeys,
+    correctIndex,
+    explanation: `Correct: ${noteLabel}.`,
+  };
 }
 
 function generateIntervalQuestion() {
@@ -300,12 +383,13 @@ function generateIntervalQuestion() {
   const lower = pool[baseIndex];
   const upper = pool[baseIndex + size];
   const intervalName = intervalNames[size];
-  const options = buildIntervalOptions(intervalName);
+  const options = buildIntervalOptions(intervalName, QUIZ_OPTION_COUNT);
   const correctIndex = options.indexOf(intervalName);
 
   return {
     id: `q-${questionId++}`,
     type: "INTERVAL",
+    mode: "QUIZ",
     clef,
     keySig,
     notes: [lower, upper],
@@ -316,16 +400,17 @@ function generateIntervalQuestion() {
   };
 }
 
-function buildIntervalOptions(correctName) {
+function buildIntervalOptions(correctName, count) {
+  const optionCount = Math.max(2, Math.min(4, Number(count) || QUIZ_OPTION_COUNT));
   const names = ["2nd", "3rd", "4th", "5th"];
   const options = new Set([correctName]);
   const index = names.indexOf(correctName);
   if (index > 0) options.add(names[index - 1]);
   if (index < names.length - 1) options.add(names[index + 1]);
-  while (options.size < 3) {
+  while (options.size < optionCount) {
     options.add(randomItem(names));
   }
-  return shuffle(Array.from(options)).slice(0, 3);
+  return shuffle(Array.from(options)).slice(0, optionCount);
 }
 
 function shuffle(list) {
@@ -424,13 +509,13 @@ function renderLaneNotation({ containerEl, clef, keySig, noteKey }) {
   const height = containerEl.clientHeight || 130;
   renderer.resize(width, height);
   const context = renderer.getContext();
-  const scale = 0.84;
+  const scale = 0.9;
   context.scale(scale, scale);
   const scaledWidth = width / scale;
   const scaledHeight = height / scale;
   const staffWidth = Math.max(180, Math.min(scaledWidth - 24, 240));
   const staffX = Math.max(12, (scaledWidth - staffWidth) / 2);
-  const staffY = Math.max(32, (scaledHeight - 90) / 2 + 12);
+  const staffY = Math.max(16, (scaledHeight - 90) / 2);
   const stave = new VF.Stave(staffX, staffY, staffWidth);
   stave.addClef(clef).addKeySignature(keySig);
   stave.setContext(context).draw();
@@ -458,7 +543,10 @@ function getNextQuestion() {
     const [entry] = state.retryQueue.splice(dueIndex, 1);
     return entry.question;
   }
-  return Math.random() < 0.65 ? generateNoteQuestion() : generateIntervalQuestion();
+  if (state.mode === "rosettaStone") {
+    return generateRosettaQuestion();
+  }
+  return generateNoteQuestion();
 }
 
 function nextQuestion() {
@@ -472,10 +560,29 @@ function nextQuestion() {
 
 function renderQuestion(question) {
   ui.prompt.textContent = question.prompt;
+  document.body.classList.toggle("mode-rosetta", question.mode === "ROSETTA");
+  document.body.classList.toggle("mode-quiz", question.mode === "QUIZ");
   ui.lanes.forEach((lane, index) => {
-    lane.classList.toggle("lane-text-only", question.type !== "NOTE");
-    setLaneLabel(lane, question.options[index]);
-    if (question.type === "NOTE" && question.optionNoteKeys) {
+    if (question.mode === "QUIZ" && index >= QUIZ_OPTION_COUNT) {
+      lane.style.display = "none";
+      lane.classList.add("hidden");
+      lane.disabled = true;
+      setLaneLabel(lane, "");
+      clearLaneNotation(lane);
+      return;
+    }
+    lane.style.removeProperty("display");
+    const option = question.options[index];
+    if (option === undefined) {
+      lane.classList.add("hidden");
+      lane.disabled = true;
+      return;
+    }
+    lane.classList.remove("hidden");
+    lane.classList.toggle("lane-text-only", question.mode === "QUIZ");
+    lane.classList.toggle("lane-label-hidden", question.mode === "ROSETTA");
+    setLaneLabel(lane, option);
+    if (question.mode === "ROSETTA" && question.optionNoteKeys) {
       const container = lane.querySelector(".lane-notation");
       renderLaneNotation({
         containerEl: container,
@@ -489,7 +596,11 @@ function renderQuestion(question) {
     lane.disabled = false;
   });
   ui.feedback.textContent = "";
-  renderNotation(question);
+  if (question.mode !== "ROSETTA") {
+    renderNotation(question);
+  } else {
+    ui.notation.innerHTML = "";
+  }
   state.inputLocked = false;
 }
 
@@ -546,7 +657,7 @@ function renderNotation(question) {
     const x = note.getAbsoluteX();
     if (!ys || !ys.length) return;
     context.save();
-    context.setFillStyle("rgba(79, 70, 229, 0.18)");
+    context.setFillStyle("rgba(245, 158, 11, 0.22)");
     ys.forEach((y) => {
       context.beginPath();
       context.arc(x, y, 12, 0, Math.PI * 2);
@@ -560,6 +671,7 @@ function renderNotation(question) {
 
 function handleAnswer(index) {
   if (state.inputLocked || !state.currentQuestion) return;
+  if (index >= state.currentQuestion.options.length) return;
   state.inputLocked = true;
   ui.lanes.forEach((lane) => (lane.disabled = true));
   const correct = index === state.currentQuestion.correctIndex;
