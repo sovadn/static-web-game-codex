@@ -650,10 +650,10 @@ function updateTestListUi() {
     const visibleCategories = TEST_CATEGORIES.filter((category) => isTrackLearned(category.id));
     if (!visibleCategories.length) {
       const empty = document.createElement("div");
-      empty.className = "item-sub";
+      empty.className = "list-hint";
       empty.textContent = "Jos nema kategorija za vjezbanje. Kreni u Ucenje.";
       ui.testList.appendChild(empty);
-    }
+    } else {
     visibleCategories.forEach((category) => {
       const progress = getCategoryProgress(category.id);
       const actionLabel = "Vjezba";
@@ -676,6 +676,13 @@ function updateTestListUi() {
       });
       ui.testList.appendChild(item);
     });
+    }
+    if (visibleCategories.length < TEST_CATEGORIES.length) {
+      const hint = document.createElement("div");
+      hint.className = "list-hint";
+      hint.textContent = 'Nauci vise pojmova u "Ucenje" tabu da otkljucas nove vjezbe.';
+      ui.testList.appendChild(hint);
+    }
     if (ui.testBack) ui.testBack.classList.add("hidden");
     renderDashboards();
     return;
