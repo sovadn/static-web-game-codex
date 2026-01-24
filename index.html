@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tri Trake: Nota &amp; Predznak</title>
-  <link rel="stylesheet" href="styles.css?v=19" />
+  <link rel="stylesheet" href="styles.css?v=24" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -22,8 +22,8 @@
         <div id="streakValue" class="streak-value">🔥 0 dana</div>
       </div>
       <div class="card">
-        <div class="card-title">Dnevna vjezba</div>
-        <div class="card-sub">10 pitanja - ~5 min</div>
+        <div id="dailyTitle" class="card-title">Dnevna vjezba</div>
+        <div id="dailySubtitle" class="card-sub">10 pitanja - ~5 min</div>
         <div class="progress-track">
           <div id="dailyProgressFill" class="progress-fill" style="width: 0%"></div>
         </div>
@@ -50,6 +50,13 @@
       <header class="top-bar">
         <div class="brand">Solffeggio</div>
         <div id="testStatus" class="test-status">Test: -</div>
+      </header>
+      <header class="quiz-header">
+        <div class="quiz-spacer" aria-hidden="true"></div>
+        <div class="quiz-title">
+          <div id="quizTitle" class="quiz-title-text">Test</div>
+        </div>
+        <button id="exitQuizButton" class="icon-button danger" type="button" aria-label="Izlaz">X</button>
       </header>
 
       <section class="settings">
@@ -112,6 +119,17 @@
       </main>
 
       <button id="restartButton" class="restart hidden">Ponovi test</button>
+      <section id="summaryScreen" class="summary-screen hidden" aria-live="polite">
+        <div class="summary-card">
+          <div class="summary-title">Rezultat</div>
+          <div id="summaryScore" class="summary-score">0/0</div>
+          <div id="summaryMessage" class="summary-message">Bravo!</div>
+          <div class="summary-actions">
+            <button id="summaryRetryButton" class="primary-button" type="button">Ponovi test</button>
+            <button id="summaryExitButton" class="ghost-button" type="button">Zavrsi</button>
+          </div>
+        </div>
+      </section>
     </section>
 
     <section id="screen-rosetta" class="screen" data-screen="rosetta">
@@ -171,6 +189,13 @@
           <div class="item-title">Dnevni cilj</div>
           <div class="pill">10 pitanja</div>
         </div>
+        <div class="list-item">
+          <div class="item-stack">
+            <div class="item-title">Aktivnost</div>
+            <div class="item-sub">Brise graf i streak, ne testove.</div>
+          </div>
+          <button id="resetActivityButton" class="pill" type="button">Resetiraj</button>
+        </div>
       </div>
     </section>
 
@@ -192,13 +217,24 @@
         <span class="tab-label">Profil</span>
       </button>
     </nav>
+    <div id="exitModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="exitModalTitle">
+      <div class="modal-card">
+        <div id="exitModalTitle" class="modal-title">Prekid vjezbe</div>
+        <div class="modal-text">Zelis li spremiti napredak i izaci iz vjezbe?</div>
+        <div class="modal-actions">
+          <button id="exitCancelButton" class="ghost-button" type="button">Nastavi</button>
+          <button id="exitDiscardButton" class="ghost-button" type="button">Odustani</button>
+          <button id="exitConfirmButton" class="primary-button" type="button">Spremi i izadi</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="data.js?v=1"></script>
   <script src="utils.js?v=1"></script>
   <script src="audio.js?v=1"></script>
   <script src="questions.js?v=1"></script>
-  <script src="game.js?v=31"></script>
+  <script src="game.js?v=40"></script>
 
   <!--
     README
