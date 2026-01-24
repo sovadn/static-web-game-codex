@@ -414,17 +414,10 @@ function renderRosettaList() {
     const isStarted = stats.learned > 0 || stats.percent >= 5;
     card.innerHTML = `
       <div class="item-title">${category.label}</div>
-      <div class="breakdown">
-        <div class="breakdown-item"><span class="dot red"></span>${stats.unknown}</div>
-        <div class="breakdown-item"><span class="dot orange"></span>${stats.seen}</div>
-        <div class="breakdown-item"><span class="dot yellow"></span>${stats.learning}</div>
-        <div class="breakdown-item"><span class="dot green"></span>${stats.learned}</div>
-      </div>
       <div class="progress-track">
         <div class="progress-fill" style="width: ${stats.percent}%"></div>
       </div>
       <div class="rosetta-footer">
-        <div class="item-sub">${stats.due} za ponoviti</div>
         <button class="ghost-button${isStarted ? " started" : ""}" type="button" data-track="${
           category.id
         }">${
@@ -646,7 +639,6 @@ function updateTestListUi() {
       item.innerHTML = `
         <div class="test-category-body">
           <div class="test-category-title">${category.label}</div>
-          <div class="test-category-sub">${category.description}</div>
           <div class="test-bar">
             <div class="progress-track small">
               <div class="progress-fill" style="width: ${progress.percent}%"></div>
