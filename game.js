@@ -292,11 +292,18 @@ function getOverallProgress(filterFn = null) {
   return { percent, bestSum, total };
 }
 
-function getCategoryErrorCount(track) {
+function getCategoryWeaknessStats(track) {
   const tests = getCategoryTests(track);
   return tests.reduce(
-    (sum, test) => sum + Math.max(0, TEST_QUESTION_COUNT - getTestProgress(test.id).best),
-    0
+    (acc, test) => {
+      const progress = getTestProgress(test.id);
+      if (progress.attempts > 0) {
+        acc.total += TEST_QUESTION_COUNT;
+        acc.errors += Math.max(0, TEST_QUESTION_COUNT - progress.best);
+      }
+      return acc;
+    },
+    { errors: 0, total: 0 }
   );
 }
 
@@ -324,11 +331,12 @@ function getRosettaStats(track) {
 function renderWeaknessList() {
   if (!ui.weaknessList) return;
   ui.weaknessList.innerHTML = "";
-  const categories = TEST_CATEGORIES.map((category) => ({
-    ...category,
-    errors: getCategoryErrorCount(category.id),
-  }));
-  categories.sort((a, b) => b.errors - a.errors);
+  const categories = TEST_CATEGORIES.map((category) => {
+    const stats = getCategoryWeaknessStats(category.id);
+    const percent = stats.total ? Math.round((stats.errors / stats.total) * 100) : 0;
+    return { ...category, ...stats, percent };
+  });
+  categories.sort((a, b) => b.percent - a.percent || b.errors - a.errors);
   const worst = categories.filter((item) => item.errors > 0).slice(0, 2);
   if (!worst.length) {
     const empty = document.createElement("div");
@@ -337,25 +345,37 @@ function renderWeaknessList() {
     ui.weaknessList.appendChild(empty);
     return;
   }
-  const maxErrors = Math.max(...worst.map((item) => item.errors));
   worst.forEach((item) => {
-    const severity = maxErrors ? Math.round((item.errors / maxErrors) * 100) : 0;
     const row = document.createElement("div");
-    row.className = "list-item";
+    row.className = "list-item weakness-item";
+    row.setAttribute("role", "button");
+    row.setAttribute("tabindex", "0");
+    row.dataset.track = item.id;
     row.innerHTML = `
       <div class="item-stack">
         <div class="item-title">${item.label}</div>
-        <div class="item-sub">${item.errors} gresaka</div>
+        <div class="item-sub">${item.errors}/${item.total} gresaka</div>
         <div class="mini-progress">
-          <div class="progress-fill" style="width: ${severity}%"></div>
+          <div class="progress-fill" style="width: ${item.percent}%"></div>
         </div>
       </div>
       <button class="pill" type="button" data-track="${item.id}">Vjezba</button>
     `;
+    const openCategory = () => {
+      openCategoryFlow(item.id, false);
+    };
+    row.addEventListener("click", openCategory);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openCategory();
+      }
+    });
     const button = row.querySelector("button");
     if (button) {
-      button.addEventListener("click", () => {
-        openCategoryFlow(item.id, false);
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openCategory();
       });
     }
     ui.weaknessList.appendChild(row);
@@ -602,7 +622,6 @@ function updateTestListUi() {
             <div class="progress-track small">
               <div class="progress-fill" style="width: ${progress.percent}%"></div>
             </div>
-            <div class="test-percent">${progress.percent}%</div>
           </div>
         </div>
         <div class="progress-score">${actionLabel}</div>
@@ -629,12 +648,10 @@ function updateTestListUi() {
     card.innerHTML = `
       <div class="progress-meta">
         <div>${test.label}</div>
-        <div class="progress-status">Najbolje: ${progress.best}/${TEST_QUESTION_COUNT}</div>
         <div class="test-bar">
           <div class="progress-track small">
             <div class="progress-fill" style="width: ${percent}%"></div>
           </div>
-          <div class="test-percent">${percent}%</div>
         </div>
       </div>
     `;
