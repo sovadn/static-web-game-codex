@@ -692,9 +692,9 @@ function updateTestStatus() {
   const title =
     state.dailyPractice && state.dailyPractice.active
       ? "Dnevna vjezba"
-      : test
+      : state.testActive && test
       ? `Test: ${test.label}`
-      : "Test: -";
+      : "";
   if (ui.testStatus) {
     ui.testStatus.textContent = title;
   }
