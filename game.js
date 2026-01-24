@@ -3,6 +3,11 @@ const state = {
   inputLocked: false,
   mode: "quiz",
   feedbackTimer: null,
+  laneFeedbackTimer: null,
+  retryQueue: [],
+  questionSerial: 0,
+  currentQuestionKey: null,
+  currentQuestionFromRetry: false,
   settings: null,
   progress: null,
   currentTestId: null,
@@ -10,6 +15,8 @@ const state = {
   correctCount: 0,
   testActive: false,
   testCategory: null,
+  activity: null,
+  dailyPractice: null,
 };
 
 window.__gameState = state;
@@ -30,11 +37,40 @@ const ui = {
   testStatus: document.getElementById("testStatus"),
   questionProgress: document.getElementById("questionProgress"),
   scoreProgress: document.getElementById("scoreProgress"),
+  screens: Array.from(document.querySelectorAll(".screen")),
+  tabButtons: Array.from(document.querySelectorAll(".tab-button")),
+  weaknessList: document.getElementById("weaknessList"),
+  rosettaList: document.getElementById("rosettaList"),
+  forecastList: document.getElementById("forecastList"),
+  categoryProgressList: document.getElementById("categoryProgressList"),
+  dailyPracticeButton: document.getElementById("dailyPracticeButton"),
+  activityChart: document.getElementById("activityChart"),
+  streakValue: document.getElementById("streakValue"),
+  streakCard: document.getElementById("streakCard"),
+  dailyProgressFill: document.getElementById("dailyProgressFill"),
+  dailyProgressText: document.getElementById("dailyProgressText"),
+  rosettaHomePercent: document.getElementById("rosettaHomePercent"),
+  rosettaHomeFill: document.getElementById("rosettaHomeFill"),
+  rosettaHomeButton: document.getElementById("rosettaHomeButton"),
 };
 
 const STORAGE_KEYS = {
   progress: "solffeggioTestProgress",
   settings: "solffeggioTestSettings",
+  activity: "solffeggioActivity",
+};
+
+const FEEDBACK_TIMING = {
+  lane: 650,
+  notation: 550,
+  nextQuestion: 950,
+};
+
+const RETRY_SETTINGS = {
+  minGap: 2,
+  maxGap: 5,
+  maxScheduledPerQuestion: 2,
+  dueChance: 0.3,
 };
 
 function loadSettings() {
@@ -69,11 +105,387 @@ function saveProgress() {
   localStorage.setItem(STORAGE_KEYS.progress, JSON.stringify(state.progress));
 }
 
+function loadActivity() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.activity);
+    if (!raw) return { days: {} };
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : { days: {} };
+  } catch {
+    return { days: {} };
+  }
+}
+
+function saveActivity() {
+  if (!state.activity) return;
+  localStorage.setItem(STORAGE_KEYS.activity, JSON.stringify(state.activity));
+}
+
+function getTodayKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getDayRecord(dateKey) {
+  if (!state.activity.days[dateKey]) {
+    state.activity.days[dateKey] = {
+      quiz: { answered: 0, correct: 0 },
+      rosetta: { answered: 0, correct: 0 },
+    };
+  }
+  return state.activity.days[dateKey];
+}
+
+function recordActivity(correct) {
+  if (!state.activity) return;
+  const dateKey = getTodayKey();
+  const modeKey = state.mode === "rosettaStone" ? "rosetta" : "quiz";
+  const day = getDayRecord(dateKey);
+  day[modeKey].answered += 1;
+  if (correct) day[modeKey].correct += 1;
+  saveActivity();
+  renderActivityChart();
+  renderHomeStats();
+}
+
+function getAnsweredForDay(dateKey) {
+  const day = state.activity.days[dateKey];
+  if (!day) return 0;
+  return day.quiz.answered + day.rosetta.answered;
+}
+
+function getStreakCount() {
+  let streak = 0;
+  const today = new Date();
+  while (true) {
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    const key = `${year}-${month}-${day}`;
+    if (getAnsweredForDay(key) > 0) {
+      streak += 1;
+    } else {
+      break;
+    }
+    today.setDate(today.getDate() - 1);
+  }
+  return streak;
+}
+
+function selectDailyPracticeTest() {
+  const todayKey = getTodayKey();
+  if (state.dailyPractice && state.dailyPractice.dateKey === todayKey) {
+    return state.dailyPractice;
+  }
+  const scored = TESTS.map((test) => {
+    const progress = getTestProgress(test.id);
+    const errors = Math.max(0, TEST_QUESTION_COUNT - progress.best);
+    const dueBoost = progress.attempts === 0 ? 4 : progress.best < 6 ? 2 : 0;
+    return {
+      test,
+      score: errors + dueBoost,
+    };
+  }).sort((a, b) => b.score - a.score);
+
+  const chosen = scored.length ? scored[0].test : getDefaultTestId();
+  state.dailyPractice = {
+    dateKey: todayKey,
+    testId: typeof chosen === "string" ? chosen : chosen.id,
+    target: TEST_QUESTION_COUNT,
+  };
+  return state.dailyPractice;
+}
 function getTestProgress(testId) {
   if (!state.progress.tests[testId]) {
     state.progress.tests[testId] = { best: 0, attempts: 0 };
   }
   return state.progress.tests[testId];
+}
+
+function getCategoryTests(track) {
+  return TESTS.filter((test) => test.track === track);
+}
+
+function getCategoryProgress(track) {
+  const tests = getCategoryTests(track);
+  const total = tests.length * TEST_QUESTION_COUNT;
+  const bestSum = tests.reduce((sum, test) => sum + getTestProgress(test.id).best, 0);
+  const percent = total ? Math.round((bestSum / total) * 100) : 0;
+  return { percent, bestSum, total };
+}
+
+function getOverallProgress(filterFn = null) {
+  const tests = filterFn ? TESTS.filter(filterFn) : TESTS;
+  const total = tests.length * TEST_QUESTION_COUNT;
+  const bestSum = tests.reduce((sum, test) => sum + getTestProgress(test.id).best, 0);
+  const percent = total ? Math.round((bestSum / total) * 100) : 0;
+  return { percent, bestSum, total };
+}
+
+function getCategoryErrorCount(track) {
+  const tests = getCategoryTests(track);
+  return tests.reduce(
+    (sum, test) => sum + Math.max(0, TEST_QUESTION_COUNT - getTestProgress(test.id).best),
+    0
+  );
+}
+
+function getRosettaStats(track) {
+  const tests = getCategoryTests(track);
+  const total = Math.max(20, tests.length * TEST_QUESTION_COUNT);
+  const { percent } = getCategoryProgress(track);
+  const learned = Math.round((total * percent) / 100);
+  const remaining = Math.max(0, total - learned);
+  const learning = Math.round(remaining * 0.35);
+  const seen = Math.round(remaining * 0.25);
+  const unknown = Math.max(0, remaining - learning - seen);
+  const due = Math.round(learned * 0.2);
+  return {
+    total,
+    learned,
+    unknown,
+    seen,
+    learning,
+    due,
+    percent,
+  };
+}
+
+function renderWeaknessList() {
+  if (!ui.weaknessList) return;
+  ui.weaknessList.innerHTML = "";
+  const categories = TEST_CATEGORIES.map((category) => ({
+    ...category,
+    errors: getCategoryErrorCount(category.id),
+  }));
+  categories.sort((a, b) => b.errors - a.errors);
+  const worst = categories.filter((item) => item.errors > 0).slice(0, 2);
+  if (!worst.length) {
+    const empty = document.createElement("div");
+    empty.className = "item-sub";
+    empty.textContent = "Nema slabosti za prikaz.";
+    ui.weaknessList.appendChild(empty);
+    return;
+  }
+  const maxErrors = Math.max(...worst.map((item) => item.errors));
+  worst.forEach((item) => {
+    const severity = maxErrors ? Math.round((item.errors / maxErrors) * 100) : 0;
+    const row = document.createElement("div");
+    row.className = "list-item";
+    row.innerHTML = `
+      <div class="item-stack">
+        <div class="item-title">${item.label}</div>
+        <div class="item-sub">${item.errors} gresaka</div>
+        <div class="mini-progress">
+          <div class="progress-fill" style="width: ${severity}%"></div>
+        </div>
+      </div>
+      <button class="pill" type="button" data-track="${item.id}">Vjezba</button>
+    `;
+    const button = row.querySelector("button");
+    if (button) {
+      button.addEventListener("click", () => {
+        openCategoryFlow(item.id, false);
+      });
+    }
+    ui.weaknessList.appendChild(row);
+  });
+}
+
+function renderRosettaList() {
+  if (!ui.rosettaList) return;
+  ui.rosettaList.innerHTML = "";
+  TEST_CATEGORIES.forEach((category) => {
+    const stats = getRosettaStats(category.id);
+    const card = document.createElement("div");
+    card.className = "rosetta-card";
+    const isStarted = stats.learned > 0 || stats.percent >= 5;
+    card.innerHTML = `
+      <div class="item-title">${category.label}</div>
+      <div class="breakdown">
+        <div class="breakdown-item"><span class="dot red"></span>${stats.unknown}</div>
+        <div class="breakdown-item"><span class="dot orange"></span>${stats.seen}</div>
+        <div class="breakdown-item"><span class="dot yellow"></span>${stats.learning}</div>
+        <div class="breakdown-item"><span class="dot green"></span>${stats.learned}</div>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width: ${stats.percent}%"></div>
+      </div>
+      <div class="rosetta-footer">
+        <div class="item-sub">${stats.due} za ponoviti</div>
+        <button class="ghost-button${isStarted ? " started" : ""}" type="button" data-track="${
+          category.id
+        }">${
+          isStarted ? "Nastavi" : "Kreni"
+        }</button>
+      </div>
+    `;
+    const button = card.querySelector("button");
+    if (button) {
+      button.addEventListener("click", () => {
+        openCategoryFlow(category.id, true);
+      });
+    }
+    ui.rosettaList.appendChild(card);
+  });
+}
+
+function renderForecastList() {
+  if (!ui.forecastList) return;
+  ui.forecastList.innerHTML = "";
+  const items = TEST_CATEGORIES.map((category) => {
+    const stats = getRosettaStats(category.id);
+    return {
+      label: category.label,
+      count: stats.due,
+    };
+  })
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "item-sub";
+    empty.textContent = "Sve kategorije su stabilne.";
+    ui.forecastList.appendChild(empty);
+    return;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "forecast-item";
+    row.innerHTML = `
+      <div class="item-title">${item.label}</div>
+      <div class="forecast-count">${item.count} pojmova</div>
+    `;
+    ui.forecastList.appendChild(row);
+  });
+}
+
+function renderCategoryProgressList() {
+  if (!ui.categoryProgressList) return;
+  ui.categoryProgressList.innerHTML = "";
+  TEST_CATEGORIES.forEach((category) => {
+    const progress = getCategoryProgress(category.id);
+    const item = document.createElement("div");
+    item.className = "progress-item";
+    item.innerHTML = `
+      <div class="progress-meta">
+        <div>${category.label}</div>
+        <div class="progress-status">${progress.percent}% ukupno</div>
+        <div class="test-bar">
+          <div class="progress-track small">
+            <div class="progress-fill" style="width: ${progress.percent}%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="progress-score">${progress.bestSum}/${progress.total}</div>
+    `;
+    ui.categoryProgressList.appendChild(item);
+  });
+}
+
+function renderActivityChart() {
+  if (!ui.activityChart || !state.activity) return;
+  ui.activityChart.innerHTML = "";
+  const dayKeys = [];
+  const today = new Date();
+  for (let i = 6; i >= 0; i -= 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    dayKeys.push(`${year}-${month}-${day}`);
+  }
+  const totals = dayKeys.map((key) => {
+    const day = state.activity.days[key];
+    if (!day) return 0;
+    return day.quiz.answered + day.rosetta.answered;
+  });
+  const max = Math.max(1, ...totals);
+  totals.forEach((count) => {
+    const bar = document.createElement("div");
+    bar.className = "chart-bar";
+    const height = Math.max(12, Math.round((count / max) * 100));
+    bar.style.height = `${height}%`;
+    ui.activityChart.appendChild(bar);
+  });
+}
+
+function renderHomeStats() {
+  if (!state.activity) return;
+  const streak = getStreakCount();
+  if (ui.streakValue) {
+    ui.streakValue.textContent = `🔥 ${streak} dana`;
+  }
+  if (ui.streakCard) {
+    ui.streakCard.classList.toggle("streak-hot", streak >= 7);
+  }
+  const daily = selectDailyPracticeTest();
+  const todayKey = getTodayKey();
+  const day = state.activity.days[todayKey] || { quiz: { answered: 0 } };
+  const answered = Math.min(daily.target, day.quiz.answered);
+  const dailyPercent = daily.target ? Math.round((answered / daily.target) * 100) : 0;
+  if (ui.dailyProgressFill) {
+    ui.dailyProgressFill.style.width = `${dailyPercent}%`;
+  }
+  if (ui.dailyProgressText) {
+    ui.dailyProgressText.textContent = `${answered}/${daily.target} rijeseno`;
+  }
+  const rosettaProgress = getOverallProgress((test) => test.topic === "note");
+  if (ui.rosettaHomePercent) {
+    ui.rosettaHomePercent.textContent = `${rosettaProgress.percent}% svladano`;
+  }
+  if (ui.rosettaHomeFill) {
+    ui.rosettaHomeFill.style.width = `${rosettaProgress.percent}%`;
+  }
+}
+
+function renderDashboards() {
+  renderWeaknessList();
+  renderRosettaList();
+  renderForecastList();
+  renderCategoryProgressList();
+  renderActivityChart();
+  renderHomeStats();
+}
+
+function openCategoryFlow(track, preferRosetta) {
+  const tests = getCategoryTests(track);
+  if (!tests.length) return;
+  const target = tests[0];
+  state.currentTestId = target.id;
+  if (preferRosetta && target.topic === "note") {
+    switchMode("rosettaStone");
+  } else {
+    switchMode("quiz");
+  }
+  setActiveScreen("tests");
+  document.body.classList.remove("show-tests");
+  if (ui.testPanel) ui.testPanel.classList.add("hidden");
+  state.testCategory = track;
+  updateTestListUi();
+  startTest(target.id);
+}
+
+function openDailyPractice() {
+  const daily = selectDailyPracticeTest();
+  const targetId = daily.testId;
+  const test = getTestById(targetId);
+  if (!test) return;
+  state.currentTestId = targetId;
+  state.testCategory = test.track;
+  switchMode("quiz");
+  setActiveScreen("tests");
+  if (ui.testPanel) ui.testPanel.classList.add("hidden");
+  document.body.classList.remove("show-tests");
+  updateTestListUi();
+  startTest(targetId);
 }
 
 function isTestUnlocked(test) {
@@ -89,14 +501,21 @@ function updateTestListUi() {
   ui.testList.innerHTML = "";
   if (!state.testCategory) {
     TEST_CATEGORIES.forEach((category) => {
+      const progress = getCategoryProgress(category.id);
       const item = document.createElement("div");
       item.className = "test-category";
       item.innerHTML = `
-        <div>
+        <div class="test-category-body">
           <div class="test-category-title">${category.label}</div>
           <div class="test-category-sub">${category.description}</div>
+          <div class="test-bar">
+            <div class="progress-track small">
+              <div class="progress-fill" style="width: ${progress.percent}%"></div>
+            </div>
+            <div class="test-percent">${progress.percent}%</div>
+          </div>
         </div>
-        <div class="progress-score">Otvori</div>
+        <div class="progress-score">Vjezba</div>
       `;
       item.addEventListener("click", () => {
         state.testCategory = category.id;
@@ -105,6 +524,7 @@ function updateTestListUi() {
       ui.testList.appendChild(item);
     });
     if (ui.testBack) ui.testBack.classList.add("hidden");
+    renderDashboards();
     return;
   }
 
@@ -112,6 +532,7 @@ function updateTestListUi() {
   filtered.forEach((test) => {
     const progress = getTestProgress(test.id);
     const unlocked = isTestUnlocked(test);
+    const percent = Math.round((progress.best / TEST_QUESTION_COUNT) * 100);
     const card = document.createElement("div");
     const isActive = test.id === state.currentTestId;
     card.className = `test-card${unlocked ? "" : " locked"}${isActive ? " active" : ""}`;
@@ -119,6 +540,12 @@ function updateTestListUi() {
       <div class="progress-meta">
         <div>${test.label}</div>
         <div class="progress-status">Najbolje: ${progress.best}/${TEST_QUESTION_COUNT}</div>
+        <div class="test-bar">
+          <div class="progress-track small">
+            <div class="progress-fill" style="width: ${percent}%"></div>
+          </div>
+          <div class="test-percent">${percent}%</div>
+        </div>
       </div>
     `;
     const button = document.createElement("button");
@@ -130,6 +557,7 @@ function updateTestListUi() {
     ui.testList.appendChild(card);
   });
   if (ui.testBack) ui.testBack.classList.remove("hidden");
+  renderDashboards();
 }
 
 function getTestById(testId) {
@@ -167,6 +595,10 @@ function startTest(testId) {
   state.correctCount = 0;
   state.testActive = true;
   state.inputLocked = false;
+  state.retryQueue = [];
+  state.questionSerial = 0;
+  state.currentQuestionKey = null;
+  state.currentQuestionFromRetry = false;
   if (!isRosettaAllowed()) {
     state.mode = "quiz";
   }
@@ -225,9 +657,46 @@ function isRosettaAllowed() {
   return test ? test.topic === "note" : false;
 }
 
+function setActiveScreen(screenName) {
+  ui.screens.forEach((screen) => {
+    const isActive = screen.dataset.screen === screenName;
+    screen.classList.toggle("active", isActive);
+  });
+  ui.tabButtons.forEach((button) => {
+    const isActive = button.dataset.screen === screenName;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+}
+
+function initNavigation() {
+  if (!ui.tabButtons.length || !ui.screens.length) return;
+  ui.tabButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.screen;
+      if (target) setActiveScreen(target);
+    });
+  });
+}
+
 function init() {
   state.settings = loadSettings();
   state.progress = loadProgress();
+  state.activity = loadActivity();
+  renderDashboards();
+  initNavigation();
+  if (ui.dailyPracticeButton) {
+    ui.dailyPracticeButton.addEventListener("click", () => {
+      openDailyPractice();
+    });
+  }
+  if (ui.rosettaHomeButton) {
+    ui.rosettaHomeButton.addEventListener("click", () => {
+      setActiveScreen("rosetta");
+      document.body.classList.remove("show-tests");
+      if (ui.testPanel) ui.testPanel.classList.add("hidden");
+    });
+  }
   ui.lanes.forEach((lane) => {
     lane.addEventListener("click", () => handleAnswer(Number(lane.dataset.index)));
   });
@@ -388,36 +857,134 @@ function renderLaneNotation({ containerEl, clef, keySig, noteKey }) {
   }
 }
 
+function cloneQuestion(question) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(question);
+  }
+  return JSON.parse(JSON.stringify(question));
+}
+
+function getQuestionKey(question) {
+  const payload = {
+    prompt: question.prompt || "",
+    type: question.type || "",
+    mode: question.mode || "",
+    clef: question.clef || "",
+    keySig: question.keySig || "",
+    notes: question.notes || null,
+    accidentals: question.accidentals || null,
+    options: question.options || null,
+    optionNoteKeys: question.optionNoteKeys || null,
+    correctIndex: question.correctIndex,
+    explanation: question.explanation || "",
+  };
+  return JSON.stringify(payload);
+}
+
+function clearRetryEntries(questionKey) {
+  state.retryQueue = state.retryQueue.filter((entry) => entry.key !== questionKey);
+}
+
+function scheduleRetry(questionKey, question, serialIndex) {
+  const existingCount = state.retryQueue.filter((entry) => entry.key === questionKey).length;
+  if (existingCount >= RETRY_SETTINGS.maxScheduledPerQuestion) return;
+  state.retryQueue.push({
+    key: questionKey,
+    question: cloneQuestion(question),
+    dueMin: serialIndex + RETRY_SETTINGS.minGap + 1,
+    dueMax: serialIndex + RETRY_SETTINGS.maxGap,
+    scheduledAt: serialIndex,
+  });
+}
+
+function selectRetryQuestion() {
+  if (!state.retryQueue.length) return null;
+  const currentIndex = state.questionSerial;
+  const dueEntries = state.retryQueue.filter((entry) => currentIndex >= entry.dueMin);
+  if (!dueEntries.length) return null;
+
+  const overdueEntries = dueEntries.filter((entry) => currentIndex >= entry.dueMax);
+  let chosen = null;
+  if (overdueEntries.length) {
+    overdueEntries.sort((a, b) => a.dueMax - b.dueMax);
+    chosen = overdueEntries[0];
+  } else if (Math.random() < RETRY_SETTINGS.dueChance) {
+    dueEntries.sort((a, b) => a.dueMax - b.dueMax);
+    chosen = dueEntries[0];
+  }
+
+  if (!chosen) return null;
+  const index = state.retryQueue.indexOf(chosen);
+  if (index >= 0) state.retryQueue.splice(index, 1);
+  return chosen;
+}
+
 function getNextQuestion() {
+  const retryEntry = selectRetryQuestion();
+  if (retryEntry) {
+    state.currentQuestionKey = retryEntry.key;
+    state.currentQuestionFromRetry = true;
+    return retryEntry.question;
+  }
   const test = getTestById(state.currentTestId) || TESTS[0];
   if (state.mode === "rosettaStone" && test.topic === "note") {
-    return generateRosettaQuestion(test);
+    const question = generateRosettaQuestion(test);
+    state.currentQuestionKey = getQuestionKey(question);
+    state.currentQuestionFromRetry = false;
+    return question;
   }
   if (test.topic === "interval-basic") {
-    return generateIntervalQuestion(test);
+    const question = generateIntervalQuestion(test);
+    state.currentQuestionKey = getQuestionKey(question);
+    state.currentQuestionFromRetry = false;
+    return question;
   }
   if (test.topic === "interval-advanced") {
-    return generateIntervalQuestion(test);
+    const question = generateIntervalQuestion(test);
+    state.currentQuestionKey = getQuestionKey(question);
+    state.currentQuestionFromRetry = false;
+    return question;
   }
   if (test.topic === "triad") {
-    return generateTriadQuestion(test);
+    const question = generateTriadQuestion(test);
+    state.currentQuestionKey = getQuestionKey(question);
+    state.currentQuestionFromRetry = false;
+    return question;
   }
   if (test.topic === "seventh") {
-    return generateSeventhQuestion(test);
+    const question = generateSeventhQuestion(test);
+    state.currentQuestionKey = getQuestionKey(question);
+    state.currentQuestionFromRetry = false;
+    return question;
   }
   if (test.topic === "tonality") {
-    return generateTonalityQuestion(test);
+    const question = generateTonalityQuestion(test);
+    state.currentQuestionKey = getQuestionKey(question);
+    state.currentQuestionFromRetry = false;
+    return question;
   }
   if (test.topic === "parallel") {
-    return generateParallelQuestion(test);
+    const question = generateParallelQuestion(test);
+    state.currentQuestionKey = getQuestionKey(question);
+    state.currentQuestionFromRetry = false;
+    return question;
   }
   if (test.topic === "minor-mode") {
-    return generateMinorModeQuestion(test);
+    const question = generateMinorModeQuestion(test);
+    state.currentQuestionKey = getQuestionKey(question);
+    state.currentQuestionFromRetry = false;
+    return question;
   }
   if (test.topic === "theory") {
-    return generateTheoryQuestion(test);
+    const question = generateTheoryQuestion(test);
+    state.currentQuestionKey = getQuestionKey(question);
+    state.currentQuestionFromRetry = false;
+    return question;
   }
-  return generateNoteQuestion(test);
+  const question = generateNoteQuestion(test);
+  state.currentQuestionKey = getQuestionKey(question);
+  state.currentQuestionFromRetry = false;
+  return question;
 }
 
 function nextQuestion() {
@@ -426,6 +993,7 @@ function nextQuestion() {
     finishTest();
     return;
   }
+  state.questionSerial += 1;
   state.currentQuestion = getNextQuestion();
   renderQuestion(state.currentQuestion);
   updateTestStatus();
@@ -439,6 +1007,7 @@ function renderQuestion(question) {
   document.body.classList.toggle("theory-only", hideNotation);
   ui.notationCard.classList.toggle("hidden", hideNotation);
   ui.lanes.forEach((lane, index) => {
+    lane.classList.remove("selected", "correct", "wrong");
     if (question.mode === "QUIZ" && index >= QUIZ_OPTION_COUNT) {
       lane.style.display = "none";
       lane.classList.add("hidden");
@@ -599,6 +1168,31 @@ function handleAnswer(index) {
   state.inputLocked = true;
   ui.lanes.forEach((lane) => (lane.disabled = true));
   const correct = index === state.currentQuestion.correctIndex;
+  recordActivity(correct);
+  if (state.currentQuestionKey) {
+    if (correct) {
+      clearRetryEntries(state.currentQuestionKey);
+    } else {
+      scheduleRetry(state.currentQuestionKey, state.currentQuestion, state.questionSerial);
+    }
+  }
+  ui.lanes.forEach((lane) => lane.classList.remove("selected", "correct", "wrong"));
+  const selectedLane = ui.lanes[index];
+  if (selectedLane) {
+    selectedLane.classList.add("selected", correct ? "correct" : "wrong");
+  }
+  if (!correct) {
+    const correctLane = ui.lanes[state.currentQuestion.correctIndex];
+    if (correctLane) correctLane.classList.add("correct");
+  }
+  if (state.laneFeedbackTimer) {
+    clearTimeout(state.laneFeedbackTimer);
+    state.laneFeedbackTimer = null;
+  }
+  state.laneFeedbackTimer = setTimeout(() => {
+    ui.lanes.forEach((lane) => lane.classList.remove("selected", "correct", "wrong"));
+    state.laneFeedbackTimer = null;
+  }, FEEDBACK_TIMING.lane);
   if (correct) {
     playSuccessTone();
   } else {
@@ -620,7 +1214,7 @@ function handleAnswer(index) {
   state.feedbackTimer = setTimeout(() => {
     ui.notationCard.classList.remove("correct", "wrong");
     state.feedbackTimer = null;
-  }, 550);
+  }, FEEDBACK_TIMING.notation);
 
   if (correct) {
     state.correctCount += 1;
@@ -635,7 +1229,7 @@ function handleAnswer(index) {
     } else {
       nextQuestion();
     }
-  }, 950);
+  }, FEEDBACK_TIMING.nextQuestion);
 }
 
 init();

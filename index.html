@@ -4,83 +4,201 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tri Trake: Nota &amp; Predznak</title>
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=19" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%8E%B5%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
   <div class="app">
-    <header class="top-bar">
-      <div class="brand">Solffeggio</div>
-      <div id="testStatus" class="test-status">Test: -</div>
-    </header>
-
-    <section class="settings">
-      <div class="mode-row">
-        <div class="mode-switch" role="tablist" aria-label="Game mode">
-          <button id="quizMode" class="mode-button active" type="button" role="tab" aria-selected="true">
-            Quiz
-          </button>
-          <button
-            id="rosettaMode"
-            class="mode-button"
-            type="button"
-            role="tab"
-            aria-selected="false"
-          >
-            Rosetta Stone
-          </button>
+    <section id="screen-home" class="screen active" data-screen="home">
+      <header class="screen-header">
+        <div class="screen-title">Solffeggio</div>
+        <button class="icon-button" type="button" aria-label="Postavke">S</button>
+      </header>
+      <div id="streakCard" class="card streak-card streak-hot">
+        <div>
+          <div class="card-title">Streak</div>
+          <div class="card-sub">Zaredom vjezbas</div>
         </div>
-        <button id="testToggle" class="mode-button ghost" type="button">Testovi</button>
+        <div id="streakValue" class="streak-value">🔥 0 dana</div>
       </div>
-      <div id="testPanel" class="curriculum hidden" aria-label="Tests">
-        <div class="curriculum-section">
-          <div class="panel-header">
-            <div class="section-title">Testovi</div>
-            <button id="testBack" class="mode-button ghost small" type="button">Natrag</button>
+      <div class="card">
+        <div class="card-title">Dnevna vjezba</div>
+        <div class="card-sub">10 pitanja - ~5 min</div>
+        <div class="progress-track">
+          <div id="dailyProgressFill" class="progress-fill" style="width: 0%"></div>
+        </div>
+        <div id="dailyProgressText" class="progress-meta">0/10 rijeseno</div>
+        <button id="dailyPracticeButton" class="primary-button" type="button">Nastavi vjezbu</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Tvoje slabosti</div>
+        <div id="weaknessList" class="weakness-list"></div>
+      </div>
+      <div class="card compact">
+        <div>
+          <div class="card-title">Rosetta Stone</div>
+          <div id="rosettaHomePercent" class="card-sub">0% svladano</div>
+          <div class="mini-progress">
+            <div id="rosettaHomeFill" class="progress-fill" style="width: 0%"></div>
           </div>
-          <div id="testList" class="test-list"></div>
         </div>
+        <button id="rosettaHomeButton" class="ghost-button" type="button">Nastavi uciti</button>
       </div>
-      <div class="test-progress">
-        <div id="questionProgress" class="progress-pill">Pitanje 0/10</div>
-        <div id="scoreProgress" class="progress-pill">Točno 0/10</div>
-      </div>
-      <div id="promptText" class="prompt">Which note is shown?</div>
     </section>
 
-    <main>
-      <div id="notationCard" class="notation-card">
-        <div id="notation" class="notation"></div>
-      </div>
-      <section class="lanes" aria-label="Answer lanes">
-        <button class="lane" data-index="0">
-          <div class="lane-notation" aria-hidden="true"></div>
-          <div class="lane-label">A</div>
-        </button>
-        <button class="lane" data-index="1">
-          <div class="lane-notation" aria-hidden="true"></div>
-          <div class="lane-label">B</div>
-        </button>
-        <button class="lane" data-index="2">
-          <div class="lane-notation" aria-hidden="true"></div>
-          <div class="lane-label">C</div>
-        </button>
-        <button class="lane" data-index="3">
-          <div class="lane-notation" aria-hidden="true"></div>
-          <div class="lane-label">D</div>
-        </button>
-      </section>
-      <div id="feedback" class="feedback">Ready!</div>
-    </main>
+    <section id="screen-tests" class="screen" data-screen="tests">
+      <header class="top-bar">
+        <div class="brand">Solffeggio</div>
+        <div id="testStatus" class="test-status">Test: -</div>
+      </header>
 
-    <button id="restartButton" class="restart hidden">Ponovi test</button>
+      <section class="settings">
+        <div class="mode-row">
+          <div class="mode-switch" role="tablist" aria-label="Game mode">
+            <button id="quizMode" class="mode-button active" type="button" role="tab" aria-selected="true">
+              Quiz
+            </button>
+            <button
+              id="rosettaMode"
+              class="mode-button"
+              type="button"
+              role="tab"
+              aria-selected="false"
+            >
+              Rosetta Stone
+            </button>
+          </div>
+          <button id="testToggle" class="mode-button ghost" type="button">Testovi</button>
+        </div>
+        <div id="testPanel" class="curriculum hidden" aria-label="Tests">
+          <div class="curriculum-section">
+            <div class="panel-header">
+              <div class="section-title">Testovi</div>
+              <button id="testBack" class="mode-button ghost small" type="button">Natrag</button>
+            </div>
+            <div id="testList" class="test-list"></div>
+          </div>
+        </div>
+        <div class="test-progress">
+          <div id="questionProgress" class="progress-pill">Pitanje 0/10</div>
+          <div id="scoreProgress" class="progress-pill">Tocno 0/10</div>
+        </div>
+        <div id="promptText" class="prompt">Which note is shown?</div>
+      </section>
+
+      <main>
+        <div id="notationCard" class="notation-card">
+          <div id="notation" class="notation"></div>
+        </div>
+        <section class="lanes" aria-label="Answer lanes">
+          <button class="lane" data-index="0">
+            <div class="lane-notation" aria-hidden="true"></div>
+            <div class="lane-label">A</div>
+          </button>
+          <button class="lane" data-index="1">
+            <div class="lane-notation" aria-hidden="true"></div>
+            <div class="lane-label">B</div>
+          </button>
+          <button class="lane" data-index="2">
+            <div class="lane-notation" aria-hidden="true"></div>
+            <div class="lane-label">C</div>
+          </button>
+          <button class="lane" data-index="3">
+            <div class="lane-notation" aria-hidden="true"></div>
+            <div class="lane-label">D</div>
+          </button>
+        </section>
+        <div id="feedback" class="feedback">Ready!</div>
+      </main>
+
+      <button id="restartButton" class="restart hidden">Ponovi test</button>
+    </section>
+
+    <section id="screen-rosetta" class="screen" data-screen="rosetta">
+      <header class="screen-header">
+        <div class="screen-title">Rosetta Stone</div>
+        <div class="screen-subtitle">Nauci bez knjige</div>
+      </header>
+      <div class="card">
+        <div class="card-title">Ukupni napredak</div>
+        <div class="progress-track">
+          <div class="progress-fill" style="width: 62%"></div>
+        </div>
+        <div class="breakdown">
+          <div class="breakdown-item"><span class="dot red"></span>12</div>
+          <div class="breakdown-item"><span class="dot orange"></span>8</div>
+          <div class="breakdown-item"><span class="dot yellow"></span>15</div>
+          <div class="breakdown-item"><span class="dot green"></span>67</div>
+        </div>
+        <div class="card-sub">67 od 120 pojmova</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Kategorije</div>
+        <div id="rosettaList" class="rosetta-list"></div>
+      </div>
+    </section>
+
+    <section id="screen-profile" class="screen" data-screen="profile">
+      <header class="screen-header">
+        <div class="screen-title">Napredak</div>
+        <button class="icon-button" type="button" aria-label="Postavke">S</button>
+      </header>
+      <div class="card">
+        <div class="card-title">Ukupna tocnost</div>
+        <div class="stat-big">79%</div>
+        <div class="card-sub">1,234 pitanja odgovoreno</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Aktivnost tjedna</div>
+        <div id="activityChart" class="chart-bars"></div>
+        <div class="card-sub">Zadnjih 7 dana</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Sto ces zaboraviti</div>
+        <div id="forecastList" class="forecast-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Napredak po kategorijama</div>
+        <div id="categoryProgressList" class="progress-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Postavke</div>
+        <div class="list-item">
+          <div class="item-title">Zvuk</div>
+          <div class="pill">Ukljucen</div>
+        </div>
+        <div class="list-item">
+          <div class="item-title">Dnevni cilj</div>
+          <div class="pill">10 pitanja</div>
+        </div>
+      </div>
+    </section>
+
+    <nav class="tab-bar" role="tablist" aria-label="Main navigation">
+      <button class="tab-button active" type="button" data-screen="home" role="tab" aria-selected="true">
+        <span class="tab-icon">🏠</span>
+        <span class="tab-label">Home</span>
+      </button>
+      <button class="tab-button" type="button" data-screen="tests" role="tab" aria-selected="false">
+        <span class="tab-icon">📝</span>
+        <span class="tab-label">Testovi</span>
+      </button>
+      <button class="tab-button" type="button" data-screen="rosetta" role="tab" aria-selected="false">
+        <span class="tab-icon">🧠</span>
+        <span class="tab-label">Rosetta</span>
+      </button>
+      <button class="tab-button" type="button" data-screen="profile" role="tab" aria-selected="false">
+        <span class="tab-icon">👤</span>
+        <span class="tab-label">Profil</span>
+      </button>
+    </nav>
   </div>
 
   <script src="data.js?v=1"></script>
   <script src="utils.js?v=1"></script>
   <script src="audio.js?v=1"></script>
   <script src="questions.js?v=1"></script>
-  <script src="game.js?v=30"></script>
+  <script src="game.js?v=31"></script>
 
   <!--
     README
