@@ -75,6 +75,8 @@ const STORAGE_KEYS = {
   dailyPractice: "solffeggioDailyPractice",
 };
 
+const DEFAULT_TEST_TRACKS = ["note-treble"];
+
 const FEEDBACK_TIMING = {
   lane: 650,
   notation: 550,
@@ -104,14 +106,23 @@ function saveSettings() {
   localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
 }
 
+function normalizeProgress(progress) {
+  const normalized = progress && typeof progress === "object" ? progress : {};
+  if (!normalized.tests || typeof normalized.tests !== "object") normalized.tests = {};
+  if (!normalized.learnedTracks || typeof normalized.learnedTracks !== "object") {
+    normalized.learnedTracks = {};
+  }
+  return normalized;
+}
+
 function loadProgress() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.progress);
-    if (!raw) return { tests: {} };
+    if (!raw) return normalizeProgress(null);
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : { tests: {} };
+    return normalizeProgress(parsed);
   } catch {
-    return { tests: {} };
+    return normalizeProgress(null);
   }
 }
 
@@ -274,6 +285,17 @@ function getTestProgress(testId) {
 
 function getCategoryTests(track) {
   return TESTS.filter((test) => test.track === track);
+}
+
+function markTrackLearned(track) {
+  if (!state.progress.learnedTracks) state.progress.learnedTracks = {};
+  state.progress.learnedTracks[track] = true;
+  saveProgress();
+}
+
+function isTrackLearned(track) {
+  if (DEFAULT_TEST_TRACKS.includes(track)) return true;
+  return Boolean(state.progress.learnedTracks && state.progress.learnedTracks[track]);
 }
 
 function getCategoryProgress(track) {
@@ -609,7 +631,14 @@ function updateTestListUi() {
   if (!ui.testList) return;
   ui.testList.innerHTML = "";
   if (!state.testCategory) {
-    TEST_CATEGORIES.forEach((category) => {
+    const visibleCategories = TEST_CATEGORIES.filter((category) => isTrackLearned(category.id));
+    if (!visibleCategories.length) {
+      const empty = document.createElement("div");
+      empty.className = "item-sub";
+      empty.textContent = "Jos nema kategorija za vjezbanje. Kreni u Ucenje.";
+      ui.testList.appendChild(empty);
+    }
+    visibleCategories.forEach((category) => {
       const progress = getCategoryProgress(category.id);
       const actionLabel = "Vjezba";
       const item = document.createElement("div");
@@ -784,11 +813,15 @@ function finishTest() {
   updateTestListUi();
   updateTestStatus();
   const totalCount = getSessionQuestionCount();
+  const percent = totalCount ? Math.round((state.correctCount / totalCount) * 100) : 0;
+  const currentTest = getTestById(state.currentTestId);
+  if (state.mode === "rosettaStone" && currentTest && percent >= 60) {
+    markTrackLearned(currentTest.track);
+  }
   if (ui.summaryScore) {
     ui.summaryScore.textContent = `${state.correctCount}/${totalCount}`;
   }
   if (ui.summaryMessage) {
-    const percent = totalCount ? Math.round((state.correctCount / totalCount) * 100) : 0;
     ui.summaryMessage.textContent =
       percent >= 90 ? "Izvrsno!" : percent >= 70 ? "Dobro!" : percent >= 50 ? "Moze bolje" : "Nastavi vjezbati";
   }
