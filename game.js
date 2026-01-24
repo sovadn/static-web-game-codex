@@ -17,7 +17,6 @@ const state = {
   testCategory: null,
   activity: null,
   dailyPractice: null,
-  activeSession: null,
   activeScreen: "home",
   lastScreen: "home",
 };
@@ -61,7 +60,6 @@ const ui = {
   exitQuizButton: document.getElementById("exitQuizButton"),
   exitModal: document.getElementById("exitModal"),
   exitConfirmButton: document.getElementById("exitConfirmButton"),
-  exitDiscardButton: document.getElementById("exitDiscardButton"),
   exitCancelButton: document.getElementById("exitCancelButton"),
   quizTitle: document.getElementById("quizTitle"),
   summaryScreen: document.getElementById("summaryScreen"),
@@ -76,7 +74,6 @@ const STORAGE_KEYS = {
   settings: "solffeggioTestSettings",
   activity: "solffeggioActivity",
   dailyPractice: "solffeggioDailyPractice",
-  activeSession: "solffeggioActiveSession",
 };
 
 const FEEDBACK_TIMING = {
@@ -160,26 +157,7 @@ function saveDailyPractice() {
   localStorage.setItem(STORAGE_KEYS.dailyPractice, JSON.stringify(payload));
 }
 
-function loadActiveSession() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.activeSession);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveActiveSession(session) {
-  if (!session) return;
-  localStorage.setItem(STORAGE_KEYS.activeSession, JSON.stringify(session));
-}
-
-function clearActiveSession() {
-  state.activeSession = null;
-  localStorage.removeItem(STORAGE_KEYS.activeSession);
-}
+ 
 
 function resetActivity() {
   state.activity = { days: {} };
@@ -509,7 +487,6 @@ function renderActivityChart() {
 
 function renderHomeStats() {
   if (!state.activity) return;
-  const activeSession = state.activeSession;
   const streak = getStreakCount();
   if (ui.streakValue) {
     ui.streakValue.textContent = `🔥 ${streak} dana`;
@@ -522,35 +499,16 @@ function renderHomeStats() {
   const dailyTarget = state.dailyPractice ? state.dailyPractice.target : TEST_QUESTION_COUNT;
   const answered = Math.min(dailyTarget, day.quiz.answered);
   const dailyPercent = dailyTarget ? Math.round((answered / dailyTarget) * 100) : 0;
-  if (activeSession && activeSession.testId) {
-    const sessionIndex = Math.min(activeSession.testIndex || 0, activeSession.totalCount || dailyTarget);
-    const sessionTotal = activeSession.totalCount || dailyTarget;
-    const sessionPercent = sessionTotal ? Math.round((sessionIndex / sessionTotal) * 100) : 0;
-    if (ui.dailyTitle) ui.dailyTitle.textContent = "Nastavi test";
-    if (ui.dailySubtitle) {
-      ui.dailySubtitle.textContent = `${activeSession.label || "Test"} (${sessionIndex}/${sessionTotal})`;
-    }
-    if (ui.dailyProgressFill) {
-      ui.dailyProgressFill.style.width = `${sessionPercent}%`;
-    }
-    if (ui.dailyProgressText) {
-      ui.dailyProgressText.textContent = `${sessionIndex}/${sessionTotal} rijeseno`;
-    }
-    if (ui.dailyPracticeButton) {
-      ui.dailyPracticeButton.textContent = "Nastavi";
-    }
-  } else {
-    if (ui.dailyTitle) ui.dailyTitle.textContent = "Dnevna vjezba";
-    if (ui.dailySubtitle) ui.dailySubtitle.textContent = "10 pitanja - ~5 min";
-    if (ui.dailyProgressFill) {
-      ui.dailyProgressFill.style.width = `${dailyPercent}%`;
-    }
-    if (ui.dailyProgressText) {
-      ui.dailyProgressText.textContent = `${answered}/${dailyTarget} rijeseno`;
-    }
-    if (ui.dailyPracticeButton) {
-      ui.dailyPracticeButton.textContent = "Nastavi vjezbu";
-    }
+  if (ui.dailyTitle) ui.dailyTitle.textContent = "Dnevna vjezba";
+  if (ui.dailySubtitle) ui.dailySubtitle.textContent = "10 pitanja - ~5 min";
+  if (ui.dailyProgressFill) {
+    ui.dailyProgressFill.style.width = `${dailyPercent}%`;
+  }
+  if (ui.dailyProgressText) {
+    ui.dailyProgressText.textContent = `${answered}/${dailyTarget} rijeseno`;
+  }
+  if (ui.dailyPracticeButton) {
+    ui.dailyPracticeButton.textContent = "Nastavi vjezbu";
   }
   const rosettaProgress = getOverallProgress((test) => test.topic === "note");
   if (ui.rosettaHomePercent) {
@@ -602,58 +560,7 @@ function openDailyPractice() {
   startDailyPracticeSession(daily);
 }
 
-function buildActiveSessionSnapshot({ saveProgress }) {
-  const test = getTestById(state.currentTestId);
-  const totalCount = getSessionQuestionCount();
-  return {
-    savedAt: Date.now(),
-    testId: state.currentTestId,
-    track: test ? test.track : null,
-    label: test ? test.label : "Test",
-    mode: state.mode,
-    testIndex: state.testIndex,
-    correctCount: state.correctCount,
-    totalCount,
-    currentQuestion: state.currentQuestion,
-    currentQuestionKey: state.currentQuestionKey,
-    questionSerial: state.questionSerial,
-    retryQueue: state.retryQueue,
-    dailyPractice: state.dailyPractice && state.dailyPractice.active ? state.dailyPractice : null,
-    originScreen: state.lastScreen,
-    saveProgress: Boolean(saveProgress),
-  };
-}
-
-function resumeActiveSession() {
-  if (!state.activeSession) return;
-  const session = state.activeSession;
-  clearActiveSession();
-  state.currentTestId = session.testId;
-  state.lastScreen = session.originScreen || "tests";
-  state.testIndex = session.testIndex || 0;
-  state.correctCount = session.correctCount || 0;
-  state.testActive = true;
-  state.inputLocked = false;
-  state.retryQueue = Array.isArray(session.retryQueue) ? session.retryQueue : [];
-  state.questionSerial = session.questionSerial || 0;
-  state.currentQuestion = session.currentQuestion || null;
-  state.currentQuestionKey = session.currentQuestionKey || null;
-  state.currentQuestionFromRetry = false;
-  state.dailyPractice = session.dailyPractice || state.dailyPractice;
-  state.mode = session.mode || "quiz";
-  document.body.classList.add("in-quiz");
-  document.body.classList.remove("show-tests");
-  if (ui.testPanel) ui.testPanel.classList.add("hidden");
-  if (ui.summaryScreen) ui.summaryScreen.classList.add("hidden");
-  updateModeUi(state.mode);
-  updateTestStatus();
-  updateTestListUi();
-  if (state.currentQuestion) {
-    renderQuestion(state.currentQuestion);
-  } else {
-    nextQuestion();
-  }
-}
+ 
 
 function showExitModal() {
   if (ui.exitModal) ui.exitModal.classList.remove("hidden");
@@ -663,14 +570,7 @@ function hideExitModal() {
   if (ui.exitModal) ui.exitModal.classList.add("hidden");
 }
 
-function endTestSession({ saveProgress }) {
-  if (saveProgress) {
-    const session = buildActiveSessionSnapshot({ saveProgress: true });
-    state.activeSession = session;
-    saveActiveSession(session);
-  } else {
-    clearActiveSession();
-  }
+function endTestSession() {
   state.testActive = false;
   state.inputLocked = false;
   state.retryQueue = [];
@@ -712,11 +612,7 @@ function updateTestListUi() {
   if (!state.testCategory) {
     TEST_CATEGORIES.forEach((category) => {
       const progress = getCategoryProgress(category.id);
-      const sessionForCategory =
-        state.activeSession && state.activeSession.track === category.id ? state.activeSession : null;
-      const actionLabel = sessionForCategory
-        ? `Nastavi ${sessionForCategory.testIndex || 0}/${sessionForCategory.totalCount || TEST_QUESTION_COUNT}`
-        : "Vjezba";
+      const actionLabel = "Vjezba";
       const item = document.createElement("div");
       item.className = "test-category";
       item.innerHTML = `
@@ -733,10 +629,6 @@ function updateTestListUi() {
         <div class="progress-score">${actionLabel}</div>
       `;
       item.addEventListener("click", () => {
-        if (sessionForCategory) {
-          resumeActiveSession();
-          return;
-        }
         state.testCategory = category.id;
         updateTestListUi();
       });
@@ -832,7 +724,6 @@ function startTest(testId, originScreen = null) {
   state.testActive = true;
   state.inputLocked = false;
   if (state.dailyPractice) state.dailyPractice.active = false;
-  clearActiveSession();
   document.body.classList.add("in-quiz");
   state.retryQueue = [];
   state.questionSerial = 0;
@@ -869,7 +760,6 @@ function startDailyPracticeSession(plan) {
   state.currentQuestionFromRetry = false;
   state.dailyPractice = { ...plan, active: true };
   saveDailyPractice();
-  clearActiveSession();
   state.mode = "quiz";
   setActiveScreen("tests");
   document.body.classList.remove("show-tests");
@@ -907,7 +797,6 @@ function finishTest() {
   if (ui.summaryScreen) ui.summaryScreen.classList.remove("hidden");
   ui.restart.classList.add("hidden");
   if (state.dailyPractice) state.dailyPractice.active = false;
-  clearActiveSession();
   hideExitModal();
 }
 
@@ -973,20 +862,12 @@ function init() {
   state.progress = loadProgress();
   state.activity = loadActivity();
   state.dailyPractice = loadDailyPractice();
-  state.activeSession = loadActiveSession();
-  if (state.activeSession && state.activeSession.dailyPractice) {
-    state.dailyPractice = state.activeSession.dailyPractice;
-  }
   document.body.classList.remove("in-quiz");
   if (ui.summaryScreen) ui.summaryScreen.classList.add("hidden");
   renderDashboards();
   initNavigation();
   if (ui.dailyPracticeButton) {
     ui.dailyPracticeButton.addEventListener("click", () => {
-      if (state.activeSession) {
-        resumeActiveSession();
-        return;
-      }
       openDailyPractice();
     });
   }
@@ -1017,12 +898,7 @@ function init() {
   }
   if (ui.exitConfirmButton) {
     ui.exitConfirmButton.addEventListener("click", () => {
-      endTestSession({ saveProgress: true });
-    });
-  }
-  if (ui.exitDiscardButton) {
-    ui.exitDiscardButton.addEventListener("click", () => {
-      endTestSession({ saveProgress: false });
+      endTestSession();
     });
   }
   if (ui.summaryRetryButton) {
@@ -1039,7 +915,7 @@ function init() {
   }
   if (ui.summaryExitButton) {
     ui.summaryExitButton.addEventListener("click", () => {
-      endTestSession({ saveProgress: false });
+      endTestSession();
     });
   }
   ui.lanes.forEach((lane) => {
