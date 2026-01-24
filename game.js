@@ -521,7 +521,7 @@ function openCategoryFlow(track, preferRosetta) {
   } else {
     switchMode("quiz");
   }
-  setActiveScreen("tests");
+  setActiveScreenWithHistory("tests", { push: false });
   document.body.classList.remove("show-tests");
   if (ui.testPanel) ui.testPanel.classList.add("hidden");
   if (ui.exitModal) ui.exitModal.classList.add("hidden");
@@ -545,7 +545,8 @@ function hideExitModal() {
   if (ui.exitModal) ui.exitModal.classList.add("hidden");
 }
 
-function endTestSession() {
+function endTestSession(options = {}) {
+  const { fromPop = false, targetScreen = null } = options;
   state.testActive = false;
   state.inputLocked = false;
   state.retryQueue = [];
@@ -566,9 +567,12 @@ function endTestSession() {
   if (ui.summaryScreen) ui.summaryScreen.classList.add("hidden");
   hideExitModal();
 
-  const targetScreen = state.lastScreen || "tests";
-  setActiveScreen(targetScreen);
-  if (targetScreen === "tests") {
+  const destination = targetScreen || state.lastScreen || "tests";
+  if (!fromPop) {
+    pushHistoryState(destination, null, true);
+  }
+  setActiveScreenWithHistory(destination, { fromPop: true, push: false });
+  if (destination === "tests") {
     showTestCategories();
   }
 }
@@ -699,6 +703,7 @@ function startTest(testId, originScreen = null) {
   state.testActive = true;
   state.inputLocked = false;
   if (state.dailyPractice) state.dailyPractice.active = false;
+  pushHistoryState(state.lastScreen, "quiz", false);
   document.body.classList.add("in-quiz");
   state.retryQueue = [];
   state.questionSerial = 0;
@@ -728,6 +733,7 @@ function startDailyPracticeSession(plan) {
   state.correctCount = 0;
   state.testActive = true;
   state.inputLocked = false;
+  pushHistoryState(state.lastScreen, "quiz", false);
   document.body.classList.add("in-quiz");
   state.retryQueue = [];
   state.questionSerial = 0;
@@ -736,7 +742,7 @@ function startDailyPracticeSession(plan) {
   state.dailyPractice = { ...plan, active: true };
   saveDailyPractice();
   state.mode = "quiz";
-  setActiveScreen("tests");
+  setActiveScreenWithHistory("tests", { push: false });
   document.body.classList.remove("show-tests");
   if (ui.testPanel) ui.testPanel.classList.add("hidden");
   if (ui.exitModal) ui.exitModal.classList.add("hidden");
@@ -822,12 +828,30 @@ function setActiveScreen(screenName) {
   }
 }
 
+function pushHistoryState(screenName, overlay = null, replace = false) {
+  if (!window.history || typeof window.history.pushState !== "function") return;
+  const stateObj = { screen: screenName, overlay };
+  if (replace) {
+    window.history.replaceState(stateObj, "");
+  } else {
+    window.history.pushState(stateObj, "");
+  }
+}
+
+function setActiveScreenWithHistory(screenName, options = {}) {
+  const { fromPop = false, push = true } = options;
+  setActiveScreen(screenName);
+  if (!fromPop && push) {
+    pushHistoryState(screenName, null, false);
+  }
+}
+
 function initNavigation() {
   if (!ui.tabButtons.length || !ui.screens.length) return;
   ui.tabButtons.forEach((button) => {
     button.addEventListener("click", () => {
       const target = button.dataset.screen;
-      if (target) setActiveScreen(target);
+      if (target) setActiveScreenWithHistory(target);
     });
   });
 }
@@ -841,6 +865,23 @@ function init() {
   if (ui.summaryScreen) ui.summaryScreen.classList.add("hidden");
   renderDashboards();
   initNavigation();
+  if (window.history && typeof window.history.replaceState === "function") {
+    if (!window.history.state) {
+      window.history.replaceState({ screen: state.activeScreen, overlay: null }, "");
+    }
+    window.addEventListener("popstate", (event) => {
+      const next = event.state;
+      if (!next || !next.screen) return;
+      if (next.overlay === "quiz" && !document.body.classList.contains("in-quiz")) {
+        pushHistoryState(next.screen, null, true);
+      }
+      if (document.body.classList.contains("in-quiz")) {
+        endTestSession({ fromPop: true, targetScreen: next.screen });
+        return;
+      }
+      setActiveScreenWithHistory(next.screen, { fromPop: true, push: false });
+    });
+  }
   if (ui.dailyPracticeButton) {
     ui.dailyPracticeButton.addEventListener("click", () => {
       openDailyPractice();
@@ -848,7 +889,7 @@ function init() {
   }
   if (ui.rosettaHomeButton) {
     ui.rosettaHomeButton.addEventListener("click", () => {
-      setActiveScreen("rosetta");
+      setActiveScreenWithHistory("rosetta");
       document.body.classList.remove("show-tests");
       if (ui.testPanel) ui.testPanel.classList.add("hidden");
     });
