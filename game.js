@@ -44,7 +44,6 @@ const ui = {
   weaknessList: document.getElementById("weaknessList"),
   rosettaList: document.getElementById("rosettaList"),
   forecastList: document.getElementById("forecastList"),
-  categoryProgressList: document.getElementById("categoryProgressList"),
   dailyPracticeButton: document.getElementById("dailyPracticeButton"),
   activityChart: document.getElementById("activityChart"),
   streakValue: document.getElementById("streakValue"),
@@ -434,29 +433,6 @@ function renderForecastList() {
   });
 }
 
-function renderCategoryProgressList() {
-  if (!ui.categoryProgressList) return;
-  ui.categoryProgressList.innerHTML = "";
-  TEST_CATEGORIES.forEach((category) => {
-    const progress = getCategoryProgress(category.id);
-    const item = document.createElement("div");
-    item.className = "progress-item";
-    item.innerHTML = `
-      <div class="progress-meta">
-        <div>${category.label}</div>
-        <div class="progress-status">${progress.percent}% ukupno</div>
-        <div class="test-bar">
-          <div class="progress-track small">
-            <div class="progress-fill" style="width: ${progress.percent}%"></div>
-          </div>
-        </div>
-      </div>
-      <div class="progress-score">${progress.bestSum}/${progress.total}</div>
-    `;
-    ui.categoryProgressList.appendChild(item);
-  });
-}
-
 function renderActivityChart() {
   if (!ui.activityChart || !state.activity) return;
   ui.activityChart.innerHTML = "";
@@ -523,7 +499,6 @@ function renderDashboards() {
   renderWeaknessList();
   renderRosettaList();
   renderForecastList();
-  renderCategoryProgressList();
   renderActivityChart();
   renderHomeStats();
 }
