@@ -15,6 +15,7 @@ const state = {
   correctCount: 0,
   testActive: false,
   testCategory: null,
+  rosettaCategory: null,
   activity: null,
   dailyPractice: null,
   activeScreen: "home",
@@ -407,6 +408,42 @@ function renderWeaknessList() {
 function renderRosettaList() {
   if (!ui.rosettaList) return;
   ui.rosettaList.innerHTML = "";
+  if (state.rosettaCategory) {
+    const category = TEST_CATEGORIES.find((item) => item.id === state.rosettaCategory);
+    const header = document.createElement("div");
+    header.className = "panel-header";
+    header.innerHTML = `<div class="item-title">${category ? category.label : "Kategorija"}</div>`;
+    const back = document.createElement("button");
+    back.className = "mode-button ghost small";
+    back.type = "button";
+    back.textContent = "Natrag";
+    back.addEventListener("click", () => {
+      state.rosettaCategory = null;
+      renderRosettaList();
+    });
+    header.appendChild(back);
+    ui.rosettaList.appendChild(header);
+
+    const tests = getCategoryTests(state.rosettaCategory);
+    tests.forEach((test) => {
+      const card = document.createElement("div");
+      card.className = "test-card";
+      card.innerHTML = `
+        <div class="progress-meta">
+          <div>${test.label}</div>
+        </div>
+      `;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "Kreni";
+      button.addEventListener("click", () => {
+        openRosettaTest(test.id, "rosetta");
+      });
+      card.appendChild(button);
+      ui.rosettaList.appendChild(card);
+    });
+    return;
+  }
   TEST_CATEGORIES.forEach((category) => {
     const stats = getRosettaStats(category.id);
     const card = document.createElement("div");
@@ -428,7 +465,8 @@ function renderRosettaList() {
     const button = card.querySelector("button");
     if (button) {
       button.addEventListener("click", () => {
-        openCategoryFlow(category.id, true);
+        state.rosettaCategory = category.id;
+        renderRosettaList();
       });
     }
     ui.rosettaList.appendChild(card);
@@ -563,6 +601,19 @@ function openCategoryFlow(track, preferRosetta) {
   state.testCategory = track;
   updateTestListUi();
   startTest(target.id, originScreen);
+}
+
+function openRosettaTest(testId, originScreen) {
+  const test = getTestById(testId);
+  if (!test) return;
+  switchMode("rosettaStone");
+  setActiveScreenWithHistory("tests", { push: false });
+  document.body.classList.remove("show-tests");
+  if (ui.testPanel) ui.testPanel.classList.add("hidden");
+  if (ui.exitModal) ui.exitModal.classList.add("hidden");
+  state.testCategory = test.track;
+  updateTestListUi();
+  startTest(testId, originScreen);
 }
 
 function openDailyPractice() {
@@ -867,6 +918,10 @@ function setActiveScreen(screenName) {
   });
   if (screenName === "tests" && !document.body.classList.contains("in-quiz")) {
     showTestCategories();
+  }
+  if (screenName === "rosetta") {
+    state.rosettaCategory = null;
+    renderRosettaList();
   }
 }
 
