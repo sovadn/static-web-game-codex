@@ -287,6 +287,13 @@ function getCategoryTests(track) {
   return TESTS.filter((test) => test.track === track);
 }
 
+function getNextLearningTest(track) {
+  const tests = getCategoryTests(track).slice().sort((a, b) => a.order - b.order);
+  if (!tests.length) return null;
+  const next = tests.find((test) => getTestProgress(test.id).best < UNLOCK_SCORE);
+  return next || tests[tests.length - 1];
+}
+
 function markTrackLearned(track) {
   if (!state.progress.learnedTracks) state.progress.learnedTracks = {};
   state.progress.learnedTracks[track] = true;
@@ -430,7 +437,7 @@ function renderRosettaList() {
     const button = card.querySelector("button");
     if (button) {
       button.addEventListener("click", () => {
-        openCategoryFlow(category.id, true);
+        openLearningTrack(category.id);
       });
     }
     ui.rosettaList.appendChild(card);
@@ -558,6 +565,20 @@ function openCategoryFlow(track, preferRosetta) {
   } else {
     switchMode("quiz");
   }
+  setActiveScreenWithHistory("tests", { push: false });
+  document.body.classList.remove("show-tests");
+  if (ui.testPanel) ui.testPanel.classList.add("hidden");
+  if (ui.exitModal) ui.exitModal.classList.add("hidden");
+  state.testCategory = track;
+  updateTestListUi();
+  startTest(target.id, originScreen);
+}
+
+function openLearningTrack(track) {
+  const target = getNextLearningTest(track);
+  if (!target) return;
+  const originScreen = state.activeScreen;
+  switchMode(target.topic === "note" ? "rosettaStone" : "quiz");
   setActiveScreenWithHistory("tests", { push: false });
   document.body.classList.remove("show-tests");
   if (ui.testPanel) ui.testPanel.classList.add("hidden");
