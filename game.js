@@ -21,6 +21,7 @@ const state = {
   dailyPractice: null,
   onboardingSession: null,
   awaitingExplanation: false,
+  bidirectionalEnabled: true,
   activeScreen: "home",
   lastScreen: "home",
 };
@@ -1986,8 +1987,17 @@ function renderLaneNotation({ containerEl, clef, keySig, noteKey }) {
   }
 }
 
+function shouldUseReverseNoteMode(test, mode) {
+  if (!state.bidirectionalEnabled) return false;
+  if (!test || test.topic !== "note" || mode !== "quiz") return false;
+  return state.questionSerial % 2 === 0;
+}
+
 function generateQuestionForTest(test, mode) {
   if (mode === "rosettaStone" && test.topic === "note") {
+    return generateRosettaQuestion(test);
+  }
+  if (shouldUseReverseNoteMode(test, mode)) {
     return generateRosettaQuestion(test);
   }
   if (test.topic === "interval-basic") {
