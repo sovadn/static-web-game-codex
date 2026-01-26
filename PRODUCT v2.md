@@ -155,8 +155,56 @@ Generativna pravila (umjesto eksplicitnih lista):
 - ordered_list: za pojmove gdje redoslijed nije izvediv iz jednostavnog pravila (intervali, akordi). Redoslijed je eksplicitan, ali samo na razini pojmova, ne svih mogućih pitanja.
 - explicit_qa: za kategoriju C (teorija). Svako pitanje i odgovor su ručno definirani.
 
+Ključna ideja: kurikulum ne sadrži sva moguća pitanja. On sadrži pravila po kojima engine generira pitanja i redoslijed učenja. To posebno vrijedi za note i intervale.
+
+Parametri za note (spiral_from_anchor):
+- anchor: referentna nota (npr. C1).
+- bounds: najniža i najviša nota koje se uče za određeni ključ.
+- pattern: način širenja (npr. alternating_up_down_starting_up).
+- note_system: notacija (u solfeggiu koristimo C1, D1, E1, a ne C4, D4, E4).
+
+Granice po ključevima:
+- Violinski ključ: sidro C1, donja granica npr. G (velika oktava), gornja granica npr. C3/D3.
+- Bas ključ: sidro C1, donja granica npr. C (velika oktava), gornja granica npr. G1.
+
 Primjer pravila za note (ideja):
 Sidro C1, zatim D1 (prvo gore), H (prvo dolje), E1 (drugo gore), A (drugo dolje), i tako dalje, sve dok se ne dosegne donja i gornja granica raspona za ključ.
+
+Primjer JSON formata (skraćeno):
+```
+{
+  "version": "1.0",
+  "categories": {
+    "notes_treble": {
+      "id": "notes_treble",
+      "title": "Note u violinskom ključu",
+      "track": "melody",
+      "type": "A",
+      "generator": {
+        "type": "spiral_from_anchor",
+        "anchor": "C1",
+        "bounds": { "lowest": "G", "highest": "C3" },
+        "pattern": "alternating_up_down_starting_up",
+        "note_system": "solfeggio_croatian"
+      }
+    },
+    "notes_bass": {
+      "id": "notes_bass",
+      "title": "Note u bas ključu",
+      "track": "melody",
+      "type": "A",
+      "prerequisites": ["notes_treble"],
+      "generator": {
+        "type": "spiral_from_anchor",
+        "anchor": "C1",
+        "bounds": { "lowest": "C", "highest": "G1" },
+        "pattern": "alternating_down_up_starting_down",
+        "note_system": "solfeggio_croatian"
+      }
+    }
+  }
+}
+```
 
 Pravila:
 - Aplikacija učitava kurikulum pri pokretanju i kešira ga u memoriju.
@@ -383,6 +431,30 @@ Kategorija C - Tekstualni iz Statičkog Sadržaja (Jednosmjerno Praćenje)
 Tempo oznake (Largo, Adagio, Andante, Moderato, Allegro, Vivace, Presto), artikulacijske oznake (Legato, Staccato, Tenuto, Marcato, Sforzando), notacijski pojmovi (Ligatura, Korona, Cezura, Repeticija, Da Capo, Dal Segno, Coda, Fine), teorijski pojmovi (Tonika, Dominanta, Subdominanta, Modulacija, Kadenca), glazbeni oblici (Rondo, Sonata, Fuga, Kanon).
 
 12. Plan Implementacije po Fazama
+12.1. Pregled faza (sažetak)
+- FAZA 0: Stabilizacija Temelja
+- FAZA 1: Pamćenje Slabosti
+- FAZA 1B: Strukturirani Kurikulum po Kategorijama
+- FAZA 2: Gamifikacija i Motivacija
+- FAZA 3: Spaced Repetition System
+- FAZA 4: Struktura Kurikuluma
+- FAZA 5: Onboarding
+- FAZA 6: Audio Engine
+- FAZA 7: Teachable Moments
+- FAZA 8: Dvosmjerne Vještine (Full Implementation)
+- FAZA 9: Tekstualni Sadržaj (Kategorija C)
+- FAZA 10: Polish i Optimizacija
+
+12.2. Testiranje po Fazama
+Za svaku fazu definiramo:
+- jedan Playwright smoke test u `tests/phase-<id>.spec.js`
+- jedan ručni checklist u `tests/phase-<id>.md`
+
+Pravila:
+- Testovi su inicijalno `test.skip` dok faza nije implementirana.
+- Nakon implementacije faze: otključati test, pokrenuti `npm test`, proći ručni checklist.
+- Faza je gotova tek kada automatski test i ručne provjere prođu.
+
 FAZA 0: Stabilizacija Temelja
 Trajanje: 1-2 vikenda
 
