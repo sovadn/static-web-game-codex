@@ -21,7 +21,7 @@ test.beforeEach(async ({ page }, testInfo) => {
 
   page.on("console", (msg) => {
     const type = msg.type();
-    if (type !== "error" && type !== "warning") return;
+    if (type !== "error") return;
     const text = msg.text();
     if (shouldIgnoreConsole(text)) return;
     consoleMessages.push({ type, text });
