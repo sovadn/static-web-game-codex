@@ -99,6 +99,53 @@ function generateRosettaQuestion(test) {
   };
 }
 
+function getFullNotePool(clef) {
+  const pool = notePools[clef];
+  if (!pool) return [];
+  return [...pool.level1, ...pool.level2];
+}
+
+function generateNoteQuestionForKey({ noteKey, clef, keySig, mode }) {
+  const resolvedClef = clef || "treble";
+  const resolvedKeySig = keySig || "C";
+  const resolvedMode = mode === "QUIZ" ? "QUIZ" : "ROSETTA";
+  const pool = getFullNotePool(resolvedClef);
+  const baseNote = pool.find((entry) => entry.key === noteKey);
+  const base = baseNote || {
+    key: noteKey,
+    letter: String(noteKey || "").split("/")[0]?.toUpperCase() || "C",
+  };
+  const optionCount = resolvedMode === "ROSETTA" ? ROSETTA_OPTION_COUNT : QUIZ_OPTION_COUNT;
+  const { optionNoteKeys, correctIndex } = buildNoteOptions({
+    pool: baseNote ? pool : [base, ...pool],
+    keySig: resolvedKeySig,
+    baseNote: base,
+    count: optionCount,
+  });
+  const optionLabels = optionNoteKeys.map((noteKeyOption) =>
+    formatNoteLabel(noteKeyOption, resolvedKeySig, resolvedClef, { lowercase: true, bassOctaveStyle: true })
+  );
+  const noteLabel = formatNoteLabel(base.key, resolvedKeySig, resolvedClef, {
+    lowercase: true,
+    bassOctaveStyle: true,
+  });
+
+  return {
+    id: `q-${questionId++}`,
+    type: "NOTE",
+    mode: resolvedMode,
+    topic: "note",
+    clef: resolvedClef,
+    keySig: resolvedKeySig,
+    notes: [{ key: base.key }],
+    prompt: resolvedMode === "ROSETTA" ? `Show note ${noteLabel}` : "Which note is shown?",
+    options: optionLabels,
+    optionNoteKeys,
+    correctIndex,
+    explanation: `Correct: ${noteLabel}.`,
+  };
+}
+
 function buildIntervalOptions(correctName, count, pool) {
   const optionCount = Math.max(2, Math.min(4, Number(count) || QUIZ_OPTION_COUNT));
   const names = Array.isArray(pool) && pool.length ? pool : ["2nd", "3rd", "4th", "5th", "6th", "7th", "8th"];

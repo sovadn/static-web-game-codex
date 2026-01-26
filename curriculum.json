@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "categories": {
+    "note-treble": {
+      "id": "note-treble",
+      "title": "Note - Violinski",
+      "track": "melody",
+      "type": "A",
+      "generator": {
+        "type": "spiral_from_anchor",
+        "clef": "treble",
+        "anchor": "C1",
+        "bounds": {
+          "lowest": "G0",
+          "highest": "C3"
+        },
+        "pattern": "alternating_up_down_starting_up",
+        "note_system": "solfeggio_croatian"
+      }
+    },
+    "note-bass": {
+      "id": "note-bass",
+      "title": "Note - Bas",
+      "track": "melody",
+      "type": "A",
+      "prerequisites": ["note-treble"],
+      "generator": {
+        "type": "spiral_from_anchor",
+        "clef": "bass",
+        "anchor": "C1",
+        "bounds": {
+          "lowest": "C0",
+          "highest": "G1"
+        },
+        "pattern": "alternating_down_up_starting_down",
+        "note_system": "solfeggio_croatian"
+      }
+    }
+  }
+}

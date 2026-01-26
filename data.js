@@ -25,6 +25,7 @@ const notePools = {
       { key: "f/5", letter: "F" },
     ],
     level2: [
+      { key: "c/4", letter: "C" },
       { key: "d/4", letter: "D" },
       { key: "e/4", letter: "E" },
       { key: "f/4", letter: "F" },

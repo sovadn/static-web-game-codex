@@ -10,11 +10,13 @@ const state = {
   currentQuestionFromRetry: false,
   settings: null,
   progress: null,
+  curriculum: null,
   currentTestId: null,
   testIndex: 0,
   correctCount: 0,
   testActive: false,
   testCategory: null,
+  learningSession: null,
   activity: null,
   dailyPractice: null,
   activeScreen: "home",
@@ -90,6 +92,12 @@ const RETRY_SETTINGS = {
   dueChance: 0.3,
 };
 
+const LEARNING_SETTINGS = {
+  masteryThreshold: 3,
+  newPerSession: 2,
+  unlockCount: 5,
+};
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.settings);
@@ -111,6 +119,9 @@ function normalizeProgress(progress) {
   if (!normalized.tests || typeof normalized.tests !== "object") normalized.tests = {};
   if (!normalized.learnedTracks || typeof normalized.learnedTracks !== "object") {
     normalized.learnedTracks = {};
+  }
+  if (!normalized.concepts || typeof normalized.concepts !== "object") {
+    normalized.concepts = {};
   }
   return normalized;
 }
@@ -165,6 +176,23 @@ function saveDailyPractice() {
   if (!state.dailyPractice) return;
   const payload = { ...state.dailyPractice, active: false };
   localStorage.setItem(STORAGE_KEYS.dailyPractice, JSON.stringify(payload));
+}
+
+async function loadCurriculum() {
+  try {
+    const response = await fetch("curriculum.json", { cache: "no-store" });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data || typeof data !== "object") return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function getCurriculumCategory(trackId) {
+  if (!state.curriculum || !state.curriculum.categories) return null;
+  return state.curriculum.categories[trackId] || null;
 }
 
  
@@ -287,11 +315,232 @@ function getCategoryTests(track) {
   return TESTS.filter((test) => test.track === track);
 }
 
+const SOLFEGE_LETTERS = ["C", "D", "E", "F", "G", "A", "H"];
+
+function parseSolfegeNoteId(noteId) {
+  const raw = String(noteId || "").trim().toUpperCase();
+  const match = raw.match(/^([A-H])(\d+)?$/);
+  if (!match) return null;
+  let letter = match[1];
+  if (letter === "B") letter = "H";
+  const octave = match[2] ? Number(match[2]) : 0;
+  if (Number.isNaN(octave)) return null;
+  return { letter, octave };
+}
+
+function formatSolfegeNoteId(note) {
+  return `${note.letter}${note.octave}`;
+}
+
+function shiftSolfegeNote(note, steps) {
+  let index = SOLFEGE_LETTERS.indexOf(note.letter);
+  let octave = note.octave;
+  if (index < 0) return note;
+  let remaining = steps;
+  while (remaining !== 0) {
+    if (remaining > 0) {
+      if (index === SOLFEGE_LETTERS.length - 1) {
+        index = 0;
+        octave += 1;
+      } else {
+        index += 1;
+      }
+      remaining -= 1;
+    } else {
+      if (index === 0) {
+        index = SOLFEGE_LETTERS.length - 1;
+        octave -= 1;
+      } else {
+        index -= 1;
+      }
+      remaining += 1;
+    }
+  }
+  return { letter: SOLFEGE_LETTERS[index], octave };
+}
+
+function solfegeNoteToKey(noteId, clef) {
+  const parsed = parseSolfegeNoteId(noteId);
+  if (!parsed) return null;
+  const noteLetter = parsed.letter === "H" ? "B" : parsed.letter;
+  const baseOctave = clef === "bass" ? 1 : 3;
+  const keyOctave = parsed.octave + baseOctave;
+  return `${noteLetter.toLowerCase()}/${keyOctave}`;
+}
+
+function solfegeNoteToMidi(noteId, clef) {
+  const key = solfegeNoteToKey(noteId, clef);
+  return key ? noteKeyToMidi(key) : null;
+}
+
+function buildAscendingSolfegeSequence(lowId, highId, clef) {
+  const low = parseSolfegeNoteId(lowId);
+  const high = parseSolfegeNoteId(highId);
+  if (!low || !high) return [];
+  const lowMidi = solfegeNoteToMidi(lowId, clef);
+  const highMidi = solfegeNoteToMidi(highId, clef);
+  if (lowMidi === null || highMidi === null) return [];
+  const start = lowMidi <= highMidi ? low : high;
+  const end = lowMidi <= highMidi ? high : low;
+  const sequence = [];
+  let current = { ...start };
+  let guard = 0;
+  while (guard < 200) {
+    sequence.push(formatSolfegeNoteId(current));
+    if (current.letter === end.letter && current.octave === end.octave) break;
+    current = shiftSolfegeNote(current, 1);
+    guard += 1;
+  }
+  return sequence;
+}
+
+function buildSpiralSequence(generator) {
+  if (!generator) return [];
+  const clef = generator.clef || "treble";
+  const anchor = parseSolfegeNoteId(generator.anchor);
+  const bounds = generator.bounds || {};
+  if (!anchor || !bounds.lowest || !bounds.highest) return [];
+  const lowMidi = solfegeNoteToMidi(bounds.lowest, clef);
+  const highMidi = solfegeNoteToMidi(bounds.highest, clef);
+  if (lowMidi === null || highMidi === null) return [];
+  const minMidi = Math.min(lowMidi, highMidi);
+  const maxMidi = Math.max(lowMidi, highMidi);
+  const totalNotes = buildAscendingSolfegeSequence(bounds.lowest, bounds.highest, clef);
+  if (!totalNotes.length) return [];
+  const sequence = [];
+  const seen = new Set();
+  const inBounds = (note) => {
+    const midi = solfegeNoteToMidi(formatSolfegeNoteId(note), clef);
+    return midi !== null && midi >= minMidi && midi <= maxMidi;
+  };
+  const addNote = (note) => {
+    const id = formatSolfegeNoteId(note);
+    if (!seen.has(id) && inBounds(note)) {
+      seen.add(id);
+      sequence.push(id);
+    }
+  };
+  addNote(anchor);
+  const startDown = String(generator.pattern || "").includes("starting_down");
+  let step = 1;
+  while (sequence.length < totalNotes.length && step < totalNotes.length * 2) {
+    const up = shiftSolfegeNote(anchor, step);
+    const down = shiftSolfegeNote(anchor, -step);
+    const order = startDown ? [down, up] : [up, down];
+    order.forEach(addNote);
+    step += 1;
+  }
+  return sequence;
+}
+
+function getConceptProgress(trackId, conceptId) {
+  if (!state.progress.concepts[trackId]) state.progress.concepts[trackId] = {};
+  const category = state.progress.concepts[trackId];
+  if (!category[conceptId]) category[conceptId] = { attempts: 0, correct: 0 };
+  return category[conceptId];
+}
+
+function recordConceptResult(trackId, conceptId, correct) {
+  const entry = getConceptProgress(trackId, conceptId);
+  entry.attempts += 1;
+  if (correct) entry.correct += 1;
+  saveProgress();
+  updateTrackUnlock(trackId);
+}
+
+function getMasteredConceptCount(trackId) {
+  const category = state.progress.concepts[trackId] || {};
+  return Object.values(category).filter((item) => item.correct >= LEARNING_SETTINGS.masteryThreshold).length;
+}
+
+function updateTrackUnlock(track) {
+  if (getMasteredConceptCount(track) >= LEARNING_SETTINGS.unlockCount) {
+    markTrackLearned(track);
+  }
+}
+
 function getNextLearningTest(track) {
   const tests = getCategoryTests(track).slice().sort((a, b) => a.order - b.order);
   if (!tests.length) return null;
   const next = tests.find((test) => getTestProgress(test.id).best < UNLOCK_SCORE);
   return next || tests[tests.length - 1];
+}
+
+function getCurriculumSequence(category) {
+  if (!category || !category.generator) return [];
+  const generator = category.generator;
+  if (generator.type === "spiral_from_anchor") {
+    return buildSpiralSequence(generator);
+  }
+  if (generator.type === "ordered_list") {
+    return Array.isArray(generator.sequence) ? generator.sequence : [];
+  }
+  if (generator.type === "explicit_qa") {
+    return Array.isArray(generator.sequence) ? generator.sequence : [];
+  }
+  return [];
+}
+
+function buildLearningQuestion(category, conceptId, trackId) {
+  if (category.generator && category.generator.type === "spiral_from_anchor") {
+    const clef = category.generator.clef || "treble";
+    const noteKey = solfegeNoteToKey(conceptId, clef);
+    const question = generateNoteQuestionForKey({
+      noteKey,
+      clef,
+      keySig: "C",
+      mode: "ROSETTA",
+    });
+    question.conceptId = conceptId;
+    question.categoryId = trackId;
+    return question;
+  }
+  const test = getTestById(conceptId);
+  if (test) {
+    const question = generateQuestionForTest(test, "quiz");
+    question.conceptId = conceptId;
+    question.categoryId = trackId;
+    return question;
+  }
+  const fallback = getTestById(state.currentTestId) || TESTS[0];
+  const question = generateQuestionForTest(fallback, "quiz");
+  question.conceptId = conceptId;
+  question.categoryId = trackId;
+  return question;
+}
+
+function buildLearningQueue(trackId, count) {
+  const category = getCurriculumCategory(trackId);
+  if (!category) return null;
+  const sequence = getCurriculumSequence(category);
+  if (!sequence.length) return null;
+
+  const inProgress = [];
+  const mastered = [];
+  const newConcepts = [];
+  sequence.forEach((conceptId) => {
+    const progress = getConceptProgress(trackId, conceptId);
+    if (progress.attempts === 0) {
+      newConcepts.push(conceptId);
+    } else if (progress.correct >= LEARNING_SETTINGS.masteryThreshold) {
+      mastered.push(conceptId);
+    } else {
+      inProgress.push(conceptId);
+    }
+  });
+
+  const queue = [...inProgress, ...newConcepts.slice(0, LEARNING_SETTINGS.newPerSession)];
+  const reviewPool = mastered.length ? mastered : inProgress;
+  let cursor = 0;
+  while (queue.length < count) {
+    if (!reviewPool.length) break;
+    queue.push(reviewPool[cursor % reviewPool.length]);
+    cursor += 1;
+  }
+  if (!queue.length) queue.push(sequence[0]);
+
+  const questions = queue.map((conceptId) => buildLearningQuestion(category, conceptId, trackId));
+  return { trackId, questions };
 }
 
 function markTrackLearned(track) {
@@ -302,7 +551,8 @@ function markTrackLearned(track) {
 
 function isTrackLearned(track) {
   if (DEFAULT_TEST_TRACKS.includes(track)) return true;
-  return Boolean(state.progress.learnedTracks && state.progress.learnedTracks[track]);
+  if (state.progress.learnedTracks && state.progress.learnedTracks[track]) return true;
+  return getMasteredConceptCount(track) >= LEARNING_SETTINGS.unlockCount;
 }
 
 function getCategoryProgress(track) {
@@ -575,6 +825,11 @@ function openCategoryFlow(track, preferRosetta) {
 }
 
 function openLearningTrack(track) {
+  const category = getCurriculumCategory(track);
+  if (category && category.generator) {
+    startLearningSession(track);
+    return;
+  }
   const target = getNextLearningTest(track);
   if (!target) return;
   const originScreen = state.activeScreen;
@@ -591,6 +846,39 @@ function openLearningTrack(track) {
 function openDailyPractice() {
   const daily = selectDailyPracticePlan();
   startDailyPracticeSession(daily);
+}
+
+function startLearningSession(trackId) {
+  const session = buildLearningQueue(trackId, TEST_QUESTION_COUNT);
+  if (!session || !session.questions.length) return;
+  const originScreen = state.activeScreen || "rosetta";
+  state.currentTestId = null;
+  state.lastScreen = originScreen;
+  state.testIndex = 0;
+  state.correctCount = 0;
+  state.testActive = true;
+  state.inputLocked = false;
+  if (state.dailyPractice) state.dailyPractice.active = false;
+  state.learningSession = { active: true, trackId, queue: session.questions };
+  pushHistoryState(state.lastScreen, "quiz", false);
+  document.body.classList.add("in-quiz");
+  state.retryQueue = [];
+  state.questionSerial = 0;
+  state.currentQuestionKey = null;
+  state.currentQuestionFromRetry = false;
+  state.mode = "rosettaStone";
+  setActiveScreenWithHistory("tests", { push: false });
+  document.body.classList.remove("show-tests");
+  if (ui.testPanel) ui.testPanel.classList.add("hidden");
+  if (ui.exitModal) ui.exitModal.classList.add("hidden");
+  if (ui.summaryScreen) ui.summaryScreen.classList.add("hidden");
+  ui.restart.textContent = "Ponovi vjezbu";
+  ui.restart.classList.add("hidden");
+  updateModeUi(state.mode);
+  updateTestStatus();
+  updateTestListUi();
+  ui.feedback.textContent = "";
+  nextQuestion();
 }
 
  
@@ -613,6 +901,7 @@ function endTestSession(options = {}) {
   state.currentQuestionKey = null;
   state.currentQuestionFromRetry = false;
   if (state.dailyPractice) state.dailyPractice.active = false;
+  if (state.learningSession) state.learningSession.active = false;
   if (state.feedbackTimer) {
     clearTimeout(state.feedbackTimer);
     state.feedbackTimer = null;
@@ -731,14 +1020,22 @@ function getSessionQuestionCount() {
   if (state.dailyPractice && state.dailyPractice.active) {
     return state.dailyPractice.target || TEST_QUESTION_COUNT;
   }
+  if (state.learningSession && state.learningSession.active && state.learningSession.queue) {
+    return state.learningSession.queue.length || TEST_QUESTION_COUNT;
+  }
   return TEST_QUESTION_COUNT;
 }
 
 function updateTestStatus() {
   const test = getTestById(state.currentTestId);
+  const learningCategory = state.learningSession
+    ? TEST_CATEGORIES.find((category) => category.id === state.learningSession.trackId)
+    : null;
   const title =
     state.dailyPractice && state.dailyPractice.active
       ? "Dnevna vjezba"
+      : state.learningSession && state.learningSession.active && learningCategory
+      ? `Ucenje: ${learningCategory.label}`
       : state.testActive && test
       ? `Test: ${test.label}`
       : "";
@@ -771,6 +1068,7 @@ function startTest(testId, originScreen = null) {
   state.testActive = true;
   state.inputLocked = false;
   if (state.dailyPractice) state.dailyPractice.active = false;
+  if (state.learningSession) state.learningSession.active = false;
   pushHistoryState(state.lastScreen, "quiz", false);
   document.body.classList.add("in-quiz");
   state.retryQueue = [];
@@ -801,6 +1099,7 @@ function startDailyPracticeSession(plan) {
   state.correctCount = 0;
   state.testActive = true;
   state.inputLocked = false;
+  if (state.learningSession) state.learningSession.active = false;
   pushHistoryState(state.lastScreen, "quiz", false);
   document.body.classList.add("in-quiz");
   state.retryQueue = [];
@@ -826,7 +1125,7 @@ function startDailyPracticeSession(plan) {
 
 function finishTest() {
   state.testActive = false;
-  if (!state.dailyPractice || !state.dailyPractice.active) {
+  if ((!state.dailyPractice || !state.dailyPractice.active) && (!state.learningSession || !state.learningSession.active)) {
     const progress = getTestProgress(state.currentTestId);
     progress.attempts += 1;
     progress.best = Math.max(progress.best, state.correctCount);
@@ -850,6 +1149,7 @@ function finishTest() {
   if (ui.summaryScreen) ui.summaryScreen.classList.remove("hidden");
   ui.restart.classList.add("hidden");
   if (state.dailyPractice) state.dailyPractice.active = false;
+  if (state.learningSession) state.learningSession.active = false;
   hideExitModal();
 }
 
@@ -880,6 +1180,7 @@ function switchMode(mode) {
 }
 
 function isRosettaAllowed() {
+  if (state.learningSession && state.learningSession.active) return true;
   const test = getTestById(state.currentTestId);
   return test ? test.topic === "note" : false;
 }
@@ -929,11 +1230,13 @@ function initNavigation() {
   });
 }
 
-function init() {
+async function init() {
   state.settings = loadSettings();
   state.progress = loadProgress();
   state.activity = loadActivity();
   state.dailyPractice = loadDailyPractice();
+  state.curriculum = await loadCurriculum();
+  window.__curriculum = state.curriculum;
   document.body.classList.remove("in-quiz");
   if (ui.summaryScreen) ui.summaryScreen.classList.add("hidden");
   renderDashboards();
@@ -1292,6 +1595,15 @@ function nextQuestion() {
     state.currentQuestion = item.question;
     state.currentQuestionKey = getQuestionKey(item.question);
     state.currentQuestionFromRetry = false;
+  } else if (state.learningSession && state.learningSession.active && state.learningSession.queue) {
+    const question = state.learningSession.queue[state.testIndex];
+    if (!question) {
+      finishTest();
+      return;
+    }
+    state.currentQuestion = question;
+    state.currentQuestionKey = getQuestionKey(question);
+    state.currentQuestionFromRetry = false;
   } else {
     state.currentQuestion = getNextQuestion();
   }
@@ -1469,6 +1781,14 @@ function handleAnswer(index) {
   ui.lanes.forEach((lane) => (lane.disabled = true));
   const correct = index === state.currentQuestion.correctIndex;
   recordActivity(correct);
+  if (
+    state.learningSession &&
+    state.learningSession.active &&
+    state.currentQuestion.conceptId &&
+    state.learningSession.trackId
+  ) {
+    recordConceptResult(state.learningSession.trackId, state.currentQuestion.conceptId, correct);
+  }
   if (state.currentQuestionKey) {
     if (correct) {
       clearRetryEntries(state.currentQuestionKey);
