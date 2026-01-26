@@ -172,6 +172,8 @@ const TESTS = [
   { id: "theory-1", label: "Teorija 1 (osnove)", topic: "theory", clef: "treble", level: 1, track: "theory", order: 1, theorySet: "basics" },
   { id: "theory-2", label: "Teorija 2 (tempo/izvod)", topic: "theory", clef: "treble", level: 1, track: "theory", order: 2, theorySet: "tempo" },
   { id: "theory-3", label: "Teorija 3 (sve)", topic: "theory", clef: "treble", level: 2, track: "theory", order: 3, theorySet: "all" },
+  { id: "theory-4", label: "Teorija 4 (artikulacije)", topic: "theory", clef: "treble", level: 2, track: "theory", order: 4, theorySet: "articulation" },
+  { id: "theory-5", label: "Teorija 5 (oznacavanje)", topic: "theory", clef: "treble", level: 2, track: "theory", order: 5, theorySet: "notation" },
 ];
 
 const TEST_CATEGORIES = [
@@ -225,5 +227,50 @@ const THEORY_QUESTIONS = [
     id: "ligature",
     question: "Što je ligatura?",
     answer: "Poveznica koja spaja note (npr. za legato).",
+  },
+  {
+    id: "allegro",
+    question: "Što znači allegro?",
+    answer: "Brzo i živahno.",
+  },
+  {
+    id: "moderato",
+    question: "Što znači moderato?",
+    answer: "Umjereno, srednje brzo.",
+  },
+  {
+    id: "presto",
+    question: "Što znači presto?",
+    answer: "Vrlo brzo.",
+  },
+  {
+    id: "staccato",
+    question: "Što znači staccato?",
+    answer: "Kratko i odvojeno izvođenje.",
+  },
+  {
+    id: "tenuto",
+    question: "Što znači tenuto?",
+    answer: "Održi ton punog trajanja.",
+  },
+  {
+    id: "accent",
+    question: "Što znači akcent?",
+    answer: "Naglašavanje određenog tona.",
+  },
+  {
+    id: "crescendo",
+    question: "Što znači crescendo?",
+    answer: "Postupno pojačavanje.",
+  },
+  {
+    id: "decrescendo",
+    question: "Što znači decrescendo?",
+    answer: "Postupno stišavanje.",
+  },
+  {
+    id: "fermata",
+    question: "Što znači fermata?",
+    answer: "Zadržavanje tona ili pauze.",
   },
 ];

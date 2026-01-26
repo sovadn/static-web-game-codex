@@ -579,7 +579,13 @@ function getTheoryPool(setName) {
     return THEORY_QUESTIONS.filter((item) => ["scale", "legato", "ligature"].includes(item.id));
   }
   if (setName === "tempo") {
-    return THEORY_QUESTIONS.filter((item) => ["adagio", "lento"].includes(item.id));
+    return THEORY_QUESTIONS.filter((item) => ["adagio", "lento", "allegro", "moderato", "presto"].includes(item.id));
+  }
+  if (setName === "articulation") {
+    return THEORY_QUESTIONS.filter((item) => ["staccato", "tenuto", "accent"].includes(item.id));
+  }
+  if (setName === "notation") {
+    return THEORY_QUESTIONS.filter((item) => ["crescendo", "decrescendo", "fermata"].includes(item.id));
   }
   return THEORY_QUESTIONS;
 }
