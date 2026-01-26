@@ -71,6 +71,7 @@ const ui = {
   summaryMessage: document.getElementById("summaryMessage"),
   summaryRetryButton: document.getElementById("summaryRetryButton"),
   summaryExitButton: document.getElementById("summaryExitButton"),
+  audioButton: document.getElementById("audioButton"),
   onboardingIntro: document.getElementById("onboardingIntro"),
   onboardingStartQuiz: document.getElementById("onboardingStartQuiz"),
   onboardingStartLearning: document.getElementById("onboardingStartLearning"),
@@ -1761,6 +1762,11 @@ async function init() {
       endTestSession();
     });
   }
+  if (ui.audioButton) {
+    ui.audioButton.addEventListener("click", () => {
+      playQuestionAudio(state.currentQuestion);
+    });
+  }
   if (ui.onboardingStartQuiz) {
     ui.onboardingStartQuiz.addEventListener("click", () => {
       startOnboardingSession();
@@ -2088,11 +2094,26 @@ function nextQuestion() {
   updateTestStatus();
 }
 
+function playQuestionAudio(question) {
+  if (!question || !Array.isArray(question.notes) || question.notes.length === 0) return;
+  const noteKeys = question.notes.map((note) => note.key).filter(Boolean);
+  if (!noteKeys.length) return;
+  const mode = question.type === "TRIAD" || question.type === "SEVENTH" ? "harmonic" : "melodic";
+  if (typeof playNoteSequence === "function") {
+    playNoteSequence(noteKeys, question.keySig, { mode });
+  }
+}
+
 function renderQuestion(question) {
+  if (ui.audioButton) {
+    const canPlayAudio = Array.isArray(question.notes) && question.notes.length > 0;
+    ui.audioButton.classList.toggle("hidden", !canPlayAudio);
+    ui.audioButton.disabled = !canPlayAudio;
+  }
   ui.prompt.textContent = question.prompt;
   document.body.classList.toggle("mode-rosetta", question.mode === "ROSETTA");
   document.body.classList.toggle("mode-quiz", question.mode === "QUIZ");
-  const hideNotation = question.type === "THEORY";
+  const hideNotation = question.type === "THEORY" || question.audioOnly;
   document.body.classList.toggle("theory-only", hideNotation);
   ui.notationCard.classList.toggle("hidden", hideNotation);
   ui.lanes.forEach((lane, index) => {
@@ -2136,6 +2157,9 @@ function renderQuestion(question) {
     renderNotation(question);
   } else {
     ui.notation.innerHTML = "";
+  }
+  if (question.audioOnly) {
+    playQuestionAudio(question);
   }
   state.inputLocked = false;
 }

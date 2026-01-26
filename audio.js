@@ -42,6 +42,20 @@ function playPianoNote(noteKey, keySig) {
   osc.stop(now + 0.5);
 }
 
+function playNoteSequence(noteKeys, keySig, options = {}) {
+  const keys = Array.isArray(noteKeys) ? noteKeys.filter(Boolean) : [];
+  if (!keys.length) return;
+  const mode = options.mode === "harmonic" ? "harmonic" : "melodic";
+  const gapMs = Number.isFinite(options.gapMs) ? options.gapMs : 420;
+  if (mode === "harmonic") {
+    keys.forEach((key) => playPianoNote(key, keySig));
+    return;
+  }
+  keys.forEach((key, index) => {
+    setTimeout(() => playPianoNote(key, keySig), index * gapMs);
+  });
+}
+
 function playSuccessTone() {
   const ctx = getAudioContext();
   if (!ctx) return;

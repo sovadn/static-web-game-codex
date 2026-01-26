@@ -258,6 +258,9 @@ function generateIntervalQuestion(test) {
     correctIndex = options.indexOf(intervalName);
   }
 
+  const audioOnly = Math.random() < 0.3;
+  const prompt = audioOnly ? "Slusaj i prepoznaj interval" : "What interval is shown?";
+
   return {
     id: `q-${questionId++}`,
     type: "INTERVAL",
@@ -267,7 +270,8 @@ function generateIntervalQuestion(test) {
     keySig,
     notes: [lower, upper],
     accidentals,
-    prompt: "What interval is shown?",
+    prompt,
+    audioOnly,
     options,
     correctIndex,
     explanation: `Correct: ${intervalName}.`,
