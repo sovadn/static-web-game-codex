@@ -150,6 +150,20 @@ body::after {
   justify-content: space-between;
 }
 
+.streak-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.streak-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
 .streak-value {
   font-size: 1.2rem;
   font-weight: 800;

@@ -50,6 +50,8 @@ const ui = {
   activityChart: document.getElementById("activityChart"),
   streakValue: document.getElementById("streakValue"),
   streakCard: document.getElementById("streakCard"),
+  levelValue: document.getElementById("levelValue"),
+  xpValue: document.getElementById("xpValue"),
   dailyProgressFill: document.getElementById("dailyProgressFill"),
   dailyProgressText: document.getElementById("dailyProgressText"),
   dailyTitle: document.getElementById("dailyTitle"),
@@ -98,6 +100,21 @@ const LEARNING_SETTINGS = {
   unlockCount: 5,
 };
 
+const XP_SETTINGS = {
+  perCorrect: 10,
+  perfectBonus: 50,
+  streakBonus: 20,
+  streakBonusMin: 3,
+};
+
+const LEVELS = [
+  { level: 1, title: "Pocetnik", xp: 0 },
+  { level: 2, title: "Ucenik", xp: 200 },
+  { level: 3, title: "Glazbenik", xp: 500 },
+  { level: 4, title: "Virtuoz", xp: 900 },
+  { level: 5, title: "Maestro", xp: 1400 },
+];
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.settings);
@@ -123,6 +140,18 @@ function normalizeProgress(progress) {
   if (!normalized.concepts || typeof normalized.concepts !== "object") {
     normalized.concepts = {};
   }
+  if (!normalized.profile || typeof normalized.profile !== "object") {
+    normalized.profile = { xp: 0, level: 1, badges: {}, lastStreakBonusDate: null };
+  } else {
+    if (typeof normalized.profile.xp !== "number") normalized.profile.xp = 0;
+    if (typeof normalized.profile.level !== "number") normalized.profile.level = 1;
+    if (!normalized.profile.badges || typeof normalized.profile.badges !== "object") {
+      normalized.profile.badges = {};
+    }
+    if (typeof normalized.profile.lastStreakBonusDate !== "string") {
+      normalized.profile.lastStreakBonusDate = null;
+    }
+  }
   return normalized;
 }
 
@@ -140,6 +169,51 @@ function loadProgress() {
 function saveProgress() {
   if (!state.progress) return;
   localStorage.setItem(STORAGE_KEYS.progress, JSON.stringify(state.progress));
+}
+
+function getProfile() {
+  if (!state.progress) return null;
+  if (!state.progress.profile || typeof state.progress.profile !== "object") {
+    state.progress.profile = { xp: 0, level: 1, badges: {}, lastStreakBonusDate: null };
+  }
+  return state.progress.profile;
+}
+
+function getLevelInfo(xp) {
+  const safeXp = Math.max(0, Math.floor(xp || 0));
+  let current = LEVELS[0];
+  for (const level of LEVELS) {
+    if (safeXp >= level.xp) current = level;
+  }
+  const next = LEVELS.find((level) => level.xp > current.xp) || null;
+  return {
+    level: current.level,
+    title: current.title,
+    currentXp: safeXp,
+    nextXp: next ? next.xp : null,
+  };
+}
+
+function awardXp(amount) {
+  if (!state.progress || !amount || amount <= 0) return;
+  const profile = getProfile();
+  if (!profile) return;
+  profile.xp = Math.max(0, Math.floor(profile.xp + amount));
+  const info = getLevelInfo(profile.xp);
+  profile.level = info.level;
+  saveProgress();
+  renderHomeStats();
+}
+
+function grantStreakBonus() {
+  const profile = getProfile();
+  if (!profile) return;
+  const streak = getStreakCount();
+  if (streak < XP_SETTINGS.streakBonusMin) return;
+  const todayKey = getTodayKey();
+  if (profile.lastStreakBonusDate === todayKey) return;
+  profile.lastStreakBonusDate = todayKey;
+  awardXp(XP_SETTINGS.streakBonus);
 }
 
 function loadActivity() {
@@ -764,6 +838,13 @@ function renderHomeStats() {
   if (ui.streakCard) {
     ui.streakCard.classList.toggle("streak-hot", streak >= 7);
   }
+  const profile = getProfile();
+  if (profile) {
+    const info = getLevelInfo(profile.xp);
+    profile.level = info.level;
+    if (ui.levelValue) ui.levelValue.textContent = `Razina ${info.level}`;
+    if (ui.xpValue) ui.xpValue.textContent = `${info.currentXp} XP`;
+  }
   const todayKey = getTodayKey();
   const day = state.activity.days[todayKey] || { quiz: { answered: 0 } };
   const dailyTarget = state.dailyPractice ? state.dailyPractice.target : TEST_QUESTION_COUNT;
@@ -1135,6 +1216,10 @@ function finishTest() {
   updateTestStatus();
   const totalCount = getSessionQuestionCount();
   const percent = totalCount ? Math.round((state.correctCount / totalCount) * 100) : 0;
+  if (percent === 100) {
+    awardXp(XP_SETTINGS.perfectBonus);
+  }
+  grantStreakBonus();
   const currentTest = getTestById(state.currentTestId);
   if (state.mode === "rosettaStone" && currentTest && percent >= 60) {
     markTrackLearned(currentTest.track);
@@ -1781,6 +1866,9 @@ function handleAnswer(index) {
   ui.lanes.forEach((lane) => (lane.disabled = true));
   const correct = index === state.currentQuestion.correctIndex;
   recordActivity(correct);
+  if (correct) {
+    awardXp(XP_SETTINGS.perCorrect);
+  }
   if (
     state.learningSession &&
     state.learningSession.active &&
