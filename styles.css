@@ -341,16 +341,39 @@ body::after {
   border-top: none;
 }
 
+.rosetta-card.locked {
+  opacity: 0.65;
+}
+
 .rosetta-footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
 }
 
 .ghost-button.started {
   background: rgba(245, 158, 11, 0.2);
   color: #fde68a;
+}
+
+.ghost-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status-pill {
+  pointer-events: none;
+}
+
+.status-pill.locked {
+  background: rgba(148, 163, 184, 0.18);
+  color: #94a3b8;
+}
+
+.status-pill.done {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
 }
 
 .breakdown {

@@ -359,7 +359,44 @@ function getCurriculumCategory(trackId) {
   return state.curriculum.categories[trackId] || null;
 }
 
- 
+function getTrackLabel(trackId) {
+  const category = getLearningCategory(trackId);
+  if (category && category.label) return category.label;
+  const curriculumCategory = getCurriculumCategory(trackId);
+  if (curriculumCategory && curriculumCategory.title) return curriculumCategory.title;
+  return trackId;
+}
+
+function getLearningCategory(trackId) {
+  const base = TEST_CATEGORIES.find((category) => category.id === trackId);
+  if (!base) return null;
+  const curriculumCategory = getCurriculumCategory(trackId);
+  return {
+    id: base.id,
+    label: curriculumCategory && curriculumCategory.title ? curriculumCategory.title : base.label,
+    prerequisites:
+      curriculumCategory && Array.isArray(curriculumCategory.prerequisites)
+        ? curriculumCategory.prerequisites
+        : Array.isArray(base.prerequisites)
+        ? base.prerequisites
+        : [],
+  };
+}
+
+function getLearningCategories() {
+  return TEST_CATEGORIES.map((category) => getLearningCategory(category.id)).filter(Boolean);
+}
+
+function isLearningTrackUnlocked(trackId) {
+  const category = getLearningCategory(trackId);
+  if (!category || !category.prerequisites.length) return true;
+  return category.prerequisites.every((req) => isLearningTrackCompleted(req));
+}
+
+function isLearningTrackCompleted(trackId) {
+  if (state.progress.learnedTracks && state.progress.learnedTracks[trackId]) return true;
+  return getMasteredConceptCount(trackId) >= LEARNING_SETTINGS.unlockCount;
+}
 
 function resetActivity() {
   state.activity = { days: {} };
@@ -897,23 +934,37 @@ function renderWeaknessList() {
 function renderRosettaList() {
   if (!ui.rosettaList) return;
   ui.rosettaList.innerHTML = "";
-  TEST_CATEGORIES.forEach((category) => {
+  const categories = getLearningCategories();
+  categories.forEach((category) => {
     const stats = getRosettaStats(category.id);
     const card = document.createElement("div");
-    card.className = "rosetta-card";
     const isStarted = stats.learned > 0 || stats.percent >= 5;
     const lessons = getCategoryTests(category.id).length;
+    const unlocked = isLearningTrackUnlocked(category.id);
+    const mastered = isLearningTrackCompleted(category.id);
+    const statusText = !unlocked ? "Zakljucano" : mastered ? "Savladano" : "Otkljucano";
+    const prereqLabels = category.prerequisites
+      .map((track) => getTrackLabel(track))
+      .filter(Boolean)
+      .join(", ");
+    const subtitle = unlocked
+      ? `${lessons} lekcija • Pocni od osnovnog`
+      : prereqLabels
+      ? `Potrebno: ${prereqLabels}`
+      : "Zakljucano";
+    card.className = `rosetta-card${unlocked ? "" : " locked"}`;
     card.innerHTML = `
       <div class="item-title">${category.label}</div>
-      <div class="item-sub">${lessons} lekcija • Pocni od osnovnog</div>
+      <div class="item-sub">${subtitle}</div>
       <div class="progress-track">
         <div class="progress-fill" style="width: ${stats.percent}%"></div>
       </div>
       <div class="rosetta-footer">
+        <div class="pill status-pill${unlocked ? "" : " locked"}${mastered ? " done" : ""}">${statusText}</div>
         <button class="ghost-button${isStarted ? " started" : ""}" type="button" data-track="${
           category.id
-        }">${
-          isStarted ? "Nastavi" : "Kreni"
+        }" ${unlocked ? "" : "disabled"}>${
+          unlocked ? (isStarted ? "Nastavi" : "Kreni") : "Zakljucano"
         }</button>
       </div>
     `;
@@ -1065,6 +1116,7 @@ function openCategoryFlow(track, preferRosetta) {
 }
 
 function openLearningTrack(track) {
+  if (!isLearningTrackUnlocked(track)) return;
   const category = getCurriculumCategory(track);
   if (category && category.generator) {
     startLearningSession(track);

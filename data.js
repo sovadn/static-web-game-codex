@@ -175,16 +175,16 @@ const TESTS = [
 ];
 
 const TEST_CATEGORIES = [
-  { id: "note-treble", label: "Note · Violinski", description: "Mala, prva, druga i treća oktava" },
-  { id: "note-bass", label: "Note · Bas", description: "Velika, mala i prva oktava" },
-  { id: "interval-basic", label: "Intervali (osnovno)", description: "Sekunda, terca, kvarta, kvinta" },
-  { id: "interval-advanced", label: "Intervali (napredno)", description: "Mala/velika + čisti intervali" },
-  { id: "triad", label: "Trozvuci", description: "Dur i mol trozvuci" },
-  { id: "seventh", label: "Četverozvuci", description: "Dur7 i mol7" },
-  { id: "tonality", label: "Tonaliteti", description: "Predznaci, dur i paralelni mol" },
-  { id: "parallel", label: "Paralelni tonaliteti", description: "Pitanje dur/mol parovi" },
-  { id: "minor-mode", label: "Mol vrste", description: "Prirodni, harmonijski, melodijski" },
-  { id: "theory", label: "Teorija", description: "Osnovni pojmovi i oznake" },
+  { id: "note-treble", label: "Note · Violinski", description: "Mala, prva, druga i treća oktava", prerequisites: [] },
+  { id: "note-bass", label: "Note · Bas", description: "Velika, mala i prva oktava", prerequisites: ["note-treble"] },
+  { id: "interval-basic", label: "Intervali (osnovno)", description: "Sekunda, terca, kvarta, kvinta", prerequisites: ["note-treble"] },
+  { id: "interval-advanced", label: "Intervali (napredno)", description: "Mala/velika + čisti intervali", prerequisites: ["interval-basic"] },
+  { id: "triad", label: "Trozvuci", description: "Dur i mol trozvuci", prerequisites: ["interval-basic"] },
+  { id: "seventh", label: "Četverozvuci", description: "Dur7 i mol7", prerequisites: ["triad"] },
+  { id: "tonality", label: "Tonaliteti", description: "Predznaci, dur i paralelni mol", prerequisites: ["note-treble"] },
+  { id: "parallel", label: "Paralelni tonaliteti", description: "Pitanje dur/mol parovi", prerequisites: ["tonality"] },
+  { id: "minor-mode", label: "Mol vrste", description: "Prirodni, harmonijski, melodijski", prerequisites: ["tonality"] },
+  { id: "theory", label: "Teorija", description: "Osnovni pojmovi i oznake", prerequisites: [] },
 ];
 
 const TONALITY_MAP = {
