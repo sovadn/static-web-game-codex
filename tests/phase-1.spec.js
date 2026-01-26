@@ -1,4 +1,4 @@
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("./fixtures");
 
 test.skip("Phase 1 - Pamcenje Slabosti", async ({ page }) => {
   // TODO: implement phase-specific assertions.

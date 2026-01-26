@@ -1,4 +1,4 @@
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("./fixtures");
 
 test("Phase 6 - Audio Engine", async ({ page }) => {
   await page.addInitScript(() => {

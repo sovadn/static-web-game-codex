@@ -1,4 +1,4 @@
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("./fixtures");
 
 test("game loads, renders notation, and progresses through questions", async ({ page }) => {
   await page.addInitScript(() => {

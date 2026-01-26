@@ -1,4 +1,4 @@
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("./fixtures");
 
 test("Phase 1B - Strukturirani Kurikulum", async ({ page }) => {
   await page.addInitScript(() => {

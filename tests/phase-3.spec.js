@@ -1,4 +1,4 @@
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("./fixtures");
 
 test("Phase 3 - Spaced Repetition System", async ({ page }) => {
   await page.addInitScript(() => {
