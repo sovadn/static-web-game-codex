@@ -20,6 +20,7 @@ const state = {
   activity: null,
   dailyPractice: null,
   onboardingSession: null,
+  awaitingExplanation: false,
   activeScreen: "home",
   lastScreen: "home",
 };
@@ -65,6 +66,9 @@ const ui = {
   exitModal: document.getElementById("exitModal"),
   exitConfirmButton: document.getElementById("exitConfirmButton"),
   exitCancelButton: document.getElementById("exitCancelButton"),
+  explanationModal: document.getElementById("explanationModal"),
+  explanationText: document.getElementById("explanationText"),
+  explanationContinue: document.getElementById("explanationContinue"),
   quizTitle: document.getElementById("quizTitle"),
   summaryScreen: document.getElementById("summaryScreen"),
   summaryScore: document.getElementById("summaryScore"),
@@ -1277,6 +1281,36 @@ function hideExitModal() {
   if (ui.exitModal) ui.exitModal.classList.add("hidden");
 }
 
+function getExplanationText(question) {
+  if (!question) return "Tocan odgovor je prikazan iznad.";
+  if (question.explanation) return question.explanation;
+  if (Array.isArray(question.options) && Number.isFinite(question.correctIndex)) {
+    const correct = question.options[question.correctIndex];
+    if (correct) return `Tocan odgovor: ${correct}.`;
+  }
+  return "Tocan odgovor je prikazan iznad.";
+}
+
+function showExplanationModal(question) {
+  if (!ui.explanationModal) return;
+  if (ui.explanationText) {
+    ui.explanationText.textContent = getExplanationText(question);
+  }
+  ui.explanationModal.classList.remove("hidden");
+}
+
+function hideExplanationModal() {
+  if (ui.explanationModal) ui.explanationModal.classList.add("hidden");
+}
+
+function advanceAfterAnswer() {
+  if (state.testIndex >= getSessionQuestionCount()) {
+    finishTest();
+  } else {
+    nextQuestion();
+  }
+}
+
 function endTestSession(options = {}) {
   const { fromPop = false, targetScreen = null } = options;
   state.testActive = false;
@@ -1286,6 +1320,7 @@ function endTestSession(options = {}) {
   state.currentQuestion = null;
   state.currentQuestionKey = null;
   state.currentQuestionFromRetry = false;
+  state.awaitingExplanation = false;
   if (state.dailyPractice) state.dailyPractice.active = false;
   if (state.learningSession) state.learningSession.active = false;
   if (state.onboardingSession) state.onboardingSession.active = false;
@@ -1299,6 +1334,7 @@ function endTestSession(options = {}) {
   }
   document.body.classList.remove("in-quiz");
   if (ui.summaryScreen) ui.summaryScreen.classList.add("hidden");
+  hideExplanationModal();
   hideExitModal();
 
   const destination = targetScreen || state.lastScreen || "tests";
@@ -1743,6 +1779,13 @@ async function init() {
   if (ui.exitConfirmButton) {
     ui.exitConfirmButton.addEventListener("click", () => {
       endTestSession();
+    });
+  }
+  if (ui.explanationContinue) {
+    ui.explanationContinue.addEventListener("click", () => {
+      state.awaitingExplanation = false;
+      hideExplanationModal();
+      advanceAfterAnswer();
     });
   }
   if (ui.summaryRetryButton) {
@@ -2351,13 +2394,14 @@ function handleAnswer(index) {
   state.testIndex += 1;
   updateTestStatus();
 
-  setTimeout(() => {
-    if (state.testIndex >= getSessionQuestionCount()) {
-      finishTest();
-    } else {
-      nextQuestion();
-    }
-  }, FEEDBACK_TIMING.nextQuestion);
+  if (correct) {
+    setTimeout(() => {
+      advanceAfterAnswer();
+    }, FEEDBACK_TIMING.nextQuestion);
+  } else {
+    state.awaitingExplanation = true;
+    showExplanationModal(state.currentQuestion);
+  }
 }
 
 init();

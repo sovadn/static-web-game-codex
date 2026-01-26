@@ -20,6 +20,7 @@ test("game loads, renders notation, and progresses through questions", async ({ 
 
   const prompt = page.locator("#promptText");
   const laneButtons = page.locator(".lane");
+  const explanationModal = page.locator("#explanationModal");
 
   await page.evaluate(() => {
     if (window.__gameState) {
@@ -30,9 +31,15 @@ test("game loads, renders notation, and progresses through questions", async ({ 
 
   const promptsSeen = new Set();
   for (let i = 0; i < 8; i += 1) {
+    if (await explanationModal.isVisible()) {
+      await page.click("#explanationContinue");
+    }
     promptsSeen.add(await prompt.innerText());
     await expect(laneButtons.first()).toBeEnabled();
     await laneButtons.nth(Math.floor(Math.random() * 3)).click();
+    if (await explanationModal.isVisible()) {
+      await page.click("#explanationContinue");
+    }
     await page.waitForTimeout(1100);
   }
 
