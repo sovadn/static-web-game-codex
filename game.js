@@ -114,6 +114,21 @@ const LEARNING_SETTINGS = {
   unlockCount: 5,
 };
 
+const NOTATION_REQUIRED_TYPES = ["KEY", "PARALLEL", "MINOR_MODE"];
+const VEXFLOW_VERSION = "4.2.5";
+const DEBUG_ENABLED = (() => {
+  try {
+    return localStorage.getItem("solffeggioDebug") === "1";
+  } catch {
+    return false;
+  }
+})();
+
+function debugLog(...args) {
+  if (!DEBUG_ENABLED) return;
+  console.log("[debug]", ...args);
+}
+
 const XP_SETTINGS = {
   perCorrect: 10,
   perfectBonus: 50,
@@ -1896,7 +1911,11 @@ function loadVexFlowScript(src) {
     const script = document.createElement("script");
     script.src = src;
     script.async = true;
-    script.onload = () => resolve(Boolean(getVexFlow()));
+    script.onload = () => {
+      const ready = Boolean(getVexFlow());
+      debugLog("VexFlow loaded", { src, ready });
+      resolve(ready);
+    };
     script.onerror = () => resolve(false);
     document.head.appendChild(script);
   });
@@ -1907,9 +1926,9 @@ async function waitForVexFlow() {
     return true;
   }
   const sources = [
-    "./vendor/vexflow-min.js",
-    "https://unpkg.com/vexflow@4.2.5/releases/vexflow-min.js",
-    "https://cdn.jsdelivr.net/npm/vexflow@4.2.5/releases/vexflow-min.js",
+    `./vendor/vexflow-min.js?v=${VEXFLOW_VERSION}`,
+    `https://unpkg.com/vexflow@${VEXFLOW_VERSION}/releases/vexflow-min.js`,
+    `https://cdn.jsdelivr.net/npm/vexflow@${VEXFLOW_VERSION}/releases/vexflow-min.js`,
   ];
 
   for (const src of sources) {
@@ -2166,7 +2185,36 @@ function renderQuestion(question) {
   ui.prompt.textContent = question.prompt;
   document.body.classList.toggle("mode-rosetta", question.mode === "ROSETTA");
   document.body.classList.toggle("mode-quiz", question.mode === "QUIZ");
-  const hideNotation = question.type === "THEORY" || question.audioOnly;
+  const forceNotation = NOTATION_REQUIRED_TYPES.includes(question.type);
+  const hideNotation = (question.type === "THEORY" || question.audioOnly) && !forceNotation;
+  if (forceNotation) {
+    document.body.classList.remove("mode-rosetta", "theory-only");
+    document.body.classList.add("mode-quiz");
+    ui.notationCard.classList.remove("hidden");
+    if (question.mode === "ROSETTA") {
+      debugLog("Force notation overrides ROSETTA mode", { type: question.type, prompt: question.prompt });
+    }
+  }
+  if (DEBUG_ENABLED && ui.notationCard) {
+    const computed = window.getComputedStyle(ui.notationCard);
+    debugLog("Render question", {
+      type: question.type,
+      mode: question.mode,
+      prompt: question.prompt,
+      hideNotation,
+      forceNotation,
+      bodyClasses: document.body.className,
+      cardHidden: ui.notationCard.classList.contains("hidden"),
+      cardDisplay: computed.display,
+    });
+  }
+  if (hideNotation) {
+    debugLog("Hide notation", {
+      type: question.type,
+      prompt: question.prompt,
+      audioOnly: Boolean(question.audioOnly),
+    });
+  }
   document.body.classList.toggle("theory-only", hideNotation);
   ui.notationCard.classList.toggle("hidden", hideNotation);
   ui.lanes.forEach((lane, index) => {
@@ -2204,12 +2252,12 @@ function renderQuestion(question) {
     lane.disabled = false;
   });
   ui.feedback.textContent = "";
-  if (hideNotation) {
+  const shouldRenderNotation = !hideNotation && (question.mode !== "ROSETTA" || forceNotation);
+  document.body.classList.toggle("force-notation", shouldRenderNotation);
+  if (!shouldRenderNotation) {
     ui.notation.innerHTML = "";
-  } else if (question.mode !== "ROSETTA") {
-    renderNotation(question);
   } else {
-    ui.notation.innerHTML = "";
+    renderNotation(question);
   }
   if (question.audioOnly) {
     playQuestionAudio(question);

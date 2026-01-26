@@ -1076,6 +1076,10 @@ main {
   display: none !important;
 }
 
+.force-notation .notation-card {
+  display: flex !important;
+}
+
 .mode-rosetta .lanes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
