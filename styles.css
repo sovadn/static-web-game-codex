@@ -566,6 +566,10 @@ body::after {
   display: none;
 }
 
+.onboarding .tab-bar {
+  display: none;
+}
+
 .modal {
   position: fixed;
   inset: 0;

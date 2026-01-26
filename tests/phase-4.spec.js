@@ -3,6 +3,10 @@ const { test, expect } = require("@playwright/test");
 test("Phase 4 - Struktura Kurikuluma", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.clear();
+    localStorage.setItem(
+      "solffeggioTestProgress",
+      JSON.stringify({ profile: { onboardingComplete: true } })
+    );
   });
   await page.goto("/");
 

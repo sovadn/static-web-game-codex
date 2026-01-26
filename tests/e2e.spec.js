@@ -1,6 +1,12 @@
 const { test, expect } = require("@playwright/test");
 
 test("game loads, renders notation, and progresses through questions", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "solffeggioTestProgress",
+      JSON.stringify({ profile: { onboardingComplete: true } })
+    );
+  });
   await page.goto("/");
 
   await page.locator('.tab-bar [data-screen="tests"]').click();

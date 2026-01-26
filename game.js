@@ -19,6 +19,7 @@ const state = {
   learningSession: null,
   activity: null,
   dailyPractice: null,
+  onboardingSession: null,
   activeScreen: "home",
   lastScreen: "home",
 };
@@ -70,6 +71,13 @@ const ui = {
   summaryMessage: document.getElementById("summaryMessage"),
   summaryRetryButton: document.getElementById("summaryRetryButton"),
   summaryExitButton: document.getElementById("summaryExitButton"),
+  onboardingIntro: document.getElementById("onboardingIntro"),
+  onboardingStartQuiz: document.getElementById("onboardingStartQuiz"),
+  onboardingStartLearning: document.getElementById("onboardingStartLearning"),
+  onboardingResult: document.getElementById("onboardingResult"),
+  onboardingScore: document.getElementById("onboardingScore"),
+  onboardingLevel: document.getElementById("onboardingLevel"),
+  onboardingContinue: document.getElementById("onboardingContinue"),
 };
 
 const STORAGE_KEYS = {
@@ -120,6 +128,15 @@ const SRS_SETTINGS = {
   dailyDueShare: 0.6,
 };
 
+const ONBOARDING_SETTINGS = {
+  questionCount: 6,
+  unlockTiers: [
+    { minPercent: 80, tracks: ["note-treble", "interval-basic", "triad"] },
+    { minPercent: 50, tracks: ["note-treble", "interval-basic"] },
+    { minPercent: 0, tracks: ["note-treble"] },
+  ],
+};
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.settings);
@@ -149,7 +166,14 @@ function normalizeProgress(progress) {
     normalized.srs = {};
   }
   if (!normalized.profile || typeof normalized.profile !== "object") {
-    normalized.profile = { xp: 0, level: 1, badges: {}, lastStreakBonusDate: null };
+    normalized.profile = {
+      xp: 0,
+      level: 1,
+      badges: {},
+      lastStreakBonusDate: null,
+      onboardingComplete: false,
+      calibrationLevel: null,
+    };
   } else {
     if (typeof normalized.profile.xp !== "number") normalized.profile.xp = 0;
     if (typeof normalized.profile.level !== "number") normalized.profile.level = 1;
@@ -158,6 +182,12 @@ function normalizeProgress(progress) {
     }
     if (typeof normalized.profile.lastStreakBonusDate !== "string") {
       normalized.profile.lastStreakBonusDate = null;
+    }
+    if (typeof normalized.profile.onboardingComplete !== "boolean") {
+      normalized.profile.onboardingComplete = false;
+    }
+    if (typeof normalized.profile.calibrationLevel !== "string") {
+      normalized.profile.calibrationLevel = null;
     }
   }
   return normalized;
@@ -1140,6 +1170,68 @@ function openDailyPractice() {
   startDailyPracticeSession(daily);
 }
 
+function showOnboardingIntro() {
+  document.body.classList.add("onboarding");
+  if (ui.onboardingIntro) ui.onboardingIntro.classList.remove("hidden");
+  if (ui.onboardingResult) ui.onboardingResult.classList.add("hidden");
+  setActiveScreenWithHistory("onboarding", { push: false });
+}
+
+function maybeStartOnboarding() {
+  const profile = getProfile();
+  if (!profile) return;
+  if (profile.onboardingComplete || profile.xp > 0) return;
+  showOnboardingIntro();
+}
+
+function buildOnboardingQueue(targetCount) {
+  const poolIds = ["note-treble-small-1", "interval-basic-1", "triad-1"];
+  const pool = poolIds.map((id) => getTestById(id)).filter(Boolean);
+  if (!pool.length) return [];
+  const queue = [];
+  for (let i = 0; i < targetCount; i += 1) {
+    const chosen = randomItem(pool);
+    const question = generateQuestionForTest(chosen, "quiz");
+    queue.push({ testId: chosen.id, question });
+  }
+  return queue;
+}
+
+function startOnboardingSession() {
+  const queue = buildOnboardingQueue(ONBOARDING_SETTINGS.questionCount);
+  if (!queue.length) return;
+  state.onboardingSession = { active: true, queue };
+  state.currentTestId = queue[0].testId;
+  state.lastScreen = "onboarding";
+  state.testIndex = 0;
+  state.correctCount = 0;
+  state.testActive = true;
+  state.inputLocked = false;
+  if (state.dailyPractice) state.dailyPractice.active = false;
+  if (state.learningSession) state.learningSession.active = false;
+  if (state.onboardingSession) state.onboardingSession.active = false;
+  pushHistoryState(state.lastScreen, "quiz", false);
+  document.body.classList.add("in-quiz");
+  document.body.classList.remove("onboarding");
+  state.retryQueue = [];
+  state.questionSerial = 0;
+  state.currentQuestionKey = null;
+  state.currentQuestionFromRetry = false;
+  state.mode = "quiz";
+  setActiveScreenWithHistory("tests", { push: false });
+  document.body.classList.remove("show-tests");
+  if (ui.testPanel) ui.testPanel.classList.add("hidden");
+  if (ui.exitModal) ui.exitModal.classList.add("hidden");
+  if (ui.summaryScreen) ui.summaryScreen.classList.add("hidden");
+  ui.restart.textContent = "Ponovi test";
+  ui.restart.classList.add("hidden");
+  updateModeUi(state.mode);
+  updateTestStatus();
+  updateTestListUi();
+  ui.feedback.textContent = "";
+  nextQuestion();
+}
+
 function startLearningSession(trackId) {
   const session = buildLearningQueue(trackId, TEST_QUESTION_COUNT);
   if (!session || !session.questions.length) return;
@@ -1151,6 +1243,7 @@ function startLearningSession(trackId) {
   state.testActive = true;
   state.inputLocked = false;
   if (state.dailyPractice) state.dailyPractice.active = false;
+  if (state.onboardingSession) state.onboardingSession.active = false;
   state.learningSession = { active: true, trackId, queue: session.questions };
   pushHistoryState(state.lastScreen, "quiz", false);
   document.body.classList.add("in-quiz");
@@ -1194,6 +1287,7 @@ function endTestSession(options = {}) {
   state.currentQuestionFromRetry = false;
   if (state.dailyPractice) state.dailyPractice.active = false;
   if (state.learningSession) state.learningSession.active = false;
+  if (state.onboardingSession) state.onboardingSession.active = false;
   if (state.feedbackTimer) {
     clearTimeout(state.feedbackTimer);
     state.feedbackTimer = null;
@@ -1209,6 +1303,11 @@ function endTestSession(options = {}) {
   const destination = targetScreen || state.lastScreen || "tests";
   if (!fromPop) {
     pushHistoryState(destination, null, true);
+  }
+  if (destination === "onboarding") {
+    document.body.classList.add("onboarding");
+  } else {
+    document.body.classList.remove("onboarding");
   }
   setActiveScreenWithHistory(destination, { fromPop: true, push: false });
   if (destination === "tests") {
@@ -1314,6 +1413,9 @@ function getSessionQuestionCount() {
   if (state.dailyPractice && state.dailyPractice.active) {
     return state.dailyPractice.target || TEST_QUESTION_COUNT;
   }
+  if (state.onboardingSession && state.onboardingSession.active && state.onboardingSession.queue) {
+    return state.onboardingSession.queue.length || TEST_QUESTION_COUNT;
+  }
   if (state.learningSession && state.learningSession.active && state.learningSession.queue) {
     return state.learningSession.queue.length || TEST_QUESTION_COUNT;
   }
@@ -1328,6 +1430,8 @@ function updateTestStatus() {
   const title =
     state.dailyPractice && state.dailyPractice.active
       ? "Dnevna vjezba"
+      : state.onboardingSession && state.onboardingSession.active
+      ? "Kalibracija"
       : state.learningSession && state.learningSession.active && learningCategory
       ? `Ucenje: ${learningCategory.label}`
       : state.testActive && test
@@ -1394,6 +1498,7 @@ function startDailyPracticeSession(plan) {
   state.testActive = true;
   state.inputLocked = false;
   if (state.learningSession) state.learningSession.active = false;
+  if (state.onboardingSession) state.onboardingSession.active = false;
   pushHistoryState(state.lastScreen, "quiz", false);
   document.body.classList.add("in-quiz");
   state.retryQueue = [];
@@ -1417,8 +1522,55 @@ function startDailyPracticeSession(plan) {
   nextQuestion();
 }
 
+function getOnboardingTier(percent) {
+  for (const tier of ONBOARDING_SETTINGS.unlockTiers) {
+    if (percent >= tier.minPercent) return tier;
+  }
+  return ONBOARDING_SETTINGS.unlockTiers[ONBOARDING_SETTINGS.unlockTiers.length - 1];
+}
+
+function finishOnboardingSession() {
+  const totalCount = getSessionQuestionCount();
+  const percent = totalCount ? Math.round((state.correctCount / totalCount) * 100) : 0;
+  const tier = getOnboardingTier(percent);
+  tier.tracks.forEach((track) => markTrackLearned(track));
+  const profile = getProfile();
+  if (profile) {
+    profile.onboardingComplete = true;
+    profile.calibrationLevel = `${percent}%`;
+    saveProgress();
+  }
+  state.onboardingSession.active = false;
+  document.body.classList.remove("in-quiz");
+  document.body.classList.add("onboarding");
+  setActiveScreenWithHistory("onboarding", { push: false });
+  if (ui.summaryScreen) ui.summaryScreen.classList.add("hidden");
+  if (ui.onboardingIntro) ui.onboardingIntro.classList.add("hidden");
+  if (ui.onboardingResult) ui.onboardingResult.classList.remove("hidden");
+  if (ui.onboardingScore) ui.onboardingScore.textContent = `${state.correctCount}/${totalCount}`;
+  if (ui.onboardingLevel) ui.onboardingLevel.textContent = `Kalibracija: ${percent}%`;
+  renderDashboards();
+}
+
+function completeOnboarding(targetScreen = "rosetta") {
+  const profile = getProfile();
+  if (profile) {
+    profile.onboardingComplete = true;
+    saveProgress();
+  }
+  document.body.classList.remove("onboarding");
+  if (ui.onboardingIntro) ui.onboardingIntro.classList.add("hidden");
+  if (ui.onboardingResult) ui.onboardingResult.classList.add("hidden");
+  setActiveScreenWithHistory(targetScreen, { push: false });
+  renderDashboards();
+}
+
 function finishTest() {
   state.testActive = false;
+  if (state.onboardingSession && state.onboardingSession.active) {
+    finishOnboardingSession();
+    return;
+  }
   if ((!state.dailyPractice || !state.dailyPractice.active) && (!state.learningSession || !state.learningSession.active)) {
     const progress = getTestProgress(state.currentTestId);
     progress.attempts += 1;
@@ -1485,6 +1637,7 @@ function isRosettaAllowed() {
 
 function setActiveScreen(screenName) {
   state.activeScreen = screenName;
+  document.body.classList.toggle("onboarding", screenName === "onboarding");
   ui.screens.forEach((screen) => {
     const isActive = screen.dataset.screen === screenName;
     screen.classList.toggle("active", isActive);
@@ -1608,6 +1761,21 @@ async function init() {
       endTestSession();
     });
   }
+  if (ui.onboardingStartQuiz) {
+    ui.onboardingStartQuiz.addEventListener("click", () => {
+      startOnboardingSession();
+    });
+  }
+  if (ui.onboardingStartLearning) {
+    ui.onboardingStartLearning.addEventListener("click", () => {
+      completeOnboarding("rosetta");
+    });
+  }
+  if (ui.onboardingContinue) {
+    ui.onboardingContinue.addEventListener("click", () => {
+      completeOnboarding("rosetta");
+    });
+  }
   ui.lanes.forEach((lane) => {
     lane.addEventListener("click", () => handleAnswer(Number(lane.dataset.index)));
   });
@@ -1643,6 +1811,7 @@ async function init() {
       handleAnswer(3);
     }
   });
+  maybeStartOnboarding();
   waitForVexFlow().then((ready) => {
     if (!ready) {
       ui.feedback.textContent =
@@ -1885,6 +2054,16 @@ function nextQuestion() {
   state.questionSerial += 1;
   if (state.dailyPractice && state.dailyPractice.active && state.dailyPractice.queue) {
     const item = state.dailyPractice.queue[state.testIndex];
+    if (!item) {
+      finishTest();
+      return;
+    }
+    state.currentTestId = item.testId;
+    state.currentQuestion = item.question;
+    state.currentQuestionKey = getQuestionKey(item.question);
+    state.currentQuestionFromRetry = false;
+  } else if (state.onboardingSession && state.onboardingSession.active && state.onboardingSession.queue) {
+    const item = state.onboardingSession.queue[state.testIndex];
     if (!item) {
       finishTest();
       return;

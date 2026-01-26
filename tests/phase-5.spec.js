@@ -1,7 +1,25 @@
 const { test, expect } = require("@playwright/test");
 
-test.skip("Phase 5 - Onboarding", async ({ page }) => {
-  // TODO: implement phase-specific assertions.
+test("Phase 5 - Onboarding", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.clear();
+  });
   await page.goto("/");
-  await expect(page.locator("body")).toBeVisible();
+
+  const onboardingScreen = page.locator('#screen-onboarding');
+  await expect(onboardingScreen).toBeVisible();
+
+  await page.click("#onboardingStartLearning");
+
+  const rosettaScreen = page.locator('#screen-rosetta');
+  await expect(rosettaScreen).toBeVisible();
+
+  const isOnboardingComplete = await page.evaluate(() => {
+    const raw = localStorage.getItem("solffeggioTestProgress");
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return Boolean(parsed?.profile?.onboardingComplete);
+  });
+
+  expect(isOnboardingComplete).toBeTruthy();
 });

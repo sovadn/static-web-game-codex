@@ -9,6 +9,24 @@
 </head>
 <body>
   <div class="app">
+    <section id="screen-onboarding" class="screen" data-screen="onboarding">
+      <header class="screen-header">
+        <div class="screen-title">Dobrodosao</div>
+        <div class="screen-subtitle">Postavi svoj pocetak</div>
+      </header>
+      <div id="onboardingIntro" class="card">
+        <div class="card-title">Kako zelis krenuti?</div>
+        <div class="card-sub">Brza provjera prilagodi sadrzaj tvom znanju.</div>
+        <button id="onboardingStartQuiz" class="primary-button" type="button">Brza provjera</button>
+        <button id="onboardingStartLearning" class="ghost-button" type="button">Kreni ucenje</button>
+      </div>
+      <div id="onboardingResult" class="card hidden">
+        <div class="card-title">Rezultat kalibracije</div>
+        <div id="onboardingScore" class="stat-big">0/0</div>
+        <div id="onboardingLevel" class="card-sub">Kalibracija</div>
+        <button id="onboardingContinue" class="primary-button" type="button">Nastavi</button>
+      </div>
+    </section>
     <section id="screen-home" class="screen active" data-screen="home">
       <header class="screen-header">
         <div class="screen-title">Solffeggio</div>
