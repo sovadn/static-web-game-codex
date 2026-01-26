@@ -115,6 +115,11 @@ const LEVELS = [
   { level: 5, title: "Maestro", xp: 1400 },
 ];
 
+const SRS_SETTINGS = {
+  intervalsDays: [1, 3, 7, 14, 30],
+  dailyDueShare: 0.6,
+};
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.settings);
@@ -139,6 +144,9 @@ function normalizeProgress(progress) {
   }
   if (!normalized.concepts || typeof normalized.concepts !== "object") {
     normalized.concepts = {};
+  }
+  if (!normalized.srs || typeof normalized.srs !== "object") {
+    normalized.srs = {};
   }
   if (!normalized.profile || typeof normalized.profile !== "object") {
     normalized.profile = { xp: 0, level: 1, badges: {}, lastStreakBonusDate: null };
@@ -216,6 +224,88 @@ function grantStreakBonus() {
   awardXp(XP_SETTINGS.streakBonus);
 }
 
+function getSrsStore(trackId, skill) {
+  if (!state.progress) return null;
+  if (!state.progress.srs || typeof state.progress.srs !== "object") {
+    state.progress.srs = {};
+  }
+  if (!state.progress.srs[trackId]) state.progress.srs[trackId] = {};
+  if (!state.progress.srs[trackId][skill]) state.progress.srs[trackId][skill] = {};
+  return state.progress.srs[trackId][skill];
+}
+
+function getSrsEntry(trackId, skill, conceptId) {
+  const store = getSrsStore(trackId, skill);
+  if (!store) return null;
+  if (!store[conceptId]) {
+    store[conceptId] = { stage: 0, nextReviewAt: null, lastReviewAt: null };
+  }
+  return store[conceptId];
+}
+
+function getSrsSkillForQuestion(question) {
+  if (!question) return "general";
+  if (question.topic === "note") {
+    return question.mode === "ROSETTA" ? "write" : "read";
+  }
+  return "general";
+}
+
+function recordSrsResult(trackId, skill, conceptId, correct) {
+  if (!trackId || !conceptId) return;
+  const entry = getSrsEntry(trackId, skill, conceptId);
+  if (!entry) return;
+  const todayKey = getTodayKey();
+  const stage = Number.isFinite(entry.stage) ? entry.stage : 0;
+  const interval = SRS_SETTINGS.intervalsDays[Math.max(0, Math.min(stage, SRS_SETTINGS.intervalsDays.length - 1))];
+  entry.lastReviewAt = todayKey;
+  entry.nextReviewAt = addDaysToKey(todayKey, interval);
+  entry.stage = correct ? Math.min(stage + 1, SRS_SETTINGS.intervalsDays.length - 1) : 0;
+  saveProgress();
+}
+
+function isSrsDue(entry, todayKey) {
+  if (!entry || !entry.nextReviewAt) return false;
+  return entry.nextReviewAt <= todayKey;
+}
+
+function getDueSrsEntries(trackId, skill) {
+  const store = getSrsStore(trackId, skill);
+  if (!store) return [];
+  const todayKey = getTodayKey();
+  return Object.entries(store)
+    .filter(([, entry]) => isSrsDue(entry, todayKey))
+    .map(([conceptId, entry]) => ({ conceptId, entry }));
+}
+
+function getSrsSummary(trackId) {
+  if (!state.progress || !state.progress.srs || !state.progress.srs[trackId]) return null;
+  const todayKey = getTodayKey();
+  let total = 0;
+  let due = 0;
+  Object.values(state.progress.srs[trackId]).forEach((skillStore) => {
+    Object.values(skillStore).forEach((entry) => {
+      if (!entry || !entry.nextReviewAt) return;
+      total += 1;
+      if (entry.nextReviewAt <= todayKey) due += 1;
+    });
+  });
+  if (!total) return null;
+  const freshness = Math.max(0, Math.round(((total - due) / total) * 100));
+  return { total, due, freshness };
+}
+
+function getSrsContext(question) {
+  if (!question) return null;
+  const skill = getSrsSkillForQuestion(question);
+  if (question.conceptId && question.categoryId) {
+    return { trackId: question.categoryId, conceptId: question.conceptId, skill };
+  }
+  const test = getTestById(state.currentTestId);
+  if (!test) return null;
+  return { trackId: test.track, conceptId: test.id, skill };
+}
+
 function loadActivity() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.activity);
@@ -285,6 +375,19 @@ function getTodayKey() {
   return `${year}-${month}-${day}`;
 }
 
+function addDaysToKey(dateKey, days) {
+  const parts = String(dateKey || "").split("-");
+  if (parts.length !== 3) return getTodayKey();
+  const [year, month, day] = parts.map((value) => Number(value));
+  if ([year, month, day].some((value) => Number.isNaN(value))) return getTodayKey();
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + Number(days || 0));
+  const outYear = date.getFullYear();
+  const outMonth = String(date.getMonth() + 1).padStart(2, "0");
+  const outDay = String(date.getDate()).padStart(2, "0");
+  return `${outYear}-${outMonth}-${outDay}`;
+}
+
 function getDayRecord(dateKey) {
   if (!state.activity.days[dateKey]) {
     state.activity.days[dateKey] = {
@@ -331,7 +434,48 @@ function getStreakCount() {
   return streak;
 }
 
+function getDueSrsTestItems() {
+  if (!state.progress || !state.progress.srs) return [];
+  const todayKey = getTodayKey();
+  const items = [];
+  Object.entries(state.progress.srs).forEach(([trackId, trackStore]) => {
+    Object.entries(trackStore || {}).forEach(([skill, skillStore]) => {
+      if (skill === "write") return;
+      Object.entries(skillStore || {}).forEach(([conceptId, entry]) => {
+        if (!entry || !entry.nextReviewAt) return;
+        if (entry.nextReviewAt > todayKey) return;
+        const test = getTestById(conceptId);
+        if (!test) return;
+        items.push({ trackId, skill, conceptId, dueAt: entry.nextReviewAt });
+      });
+    });
+  });
+  items.sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+  return items;
+}
+
+function buildSrsQuestionItem(item) {
+  const test = getTestById(item.conceptId);
+  if (!test) return null;
+  const mode = item.skill === "write" ? "rosettaStone" : "quiz";
+  const question = generateQuestionForTest(test, mode);
+  question.conceptId = item.conceptId;
+  question.categoryId = test.track;
+  return { testId: test.id, question };
+}
+
 function buildDailyPracticeQueue(targetCount) {
+  const queue = [];
+  const used = new Set();
+  const dueItems = getDueSrsTestItems();
+  const dueLimit = Math.round(targetCount * SRS_SETTINGS.dailyDueShare);
+  dueItems.slice(0, dueLimit).forEach((item) => {
+    const built = buildSrsQuestionItem(item);
+    if (!built) return;
+    queue.push(built);
+    used.add(built.testId);
+  });
+
   const scored = TESTS.map((test) => {
     const progress = getTestProgress(test.id);
     const errors = Math.max(0, TEST_QUESTION_COUNT - progress.best);
@@ -341,10 +485,8 @@ function buildDailyPracticeQueue(targetCount) {
       weight: Math.max(1, errors + dueBoost),
     };
   });
-
   const totalWeight = scored.reduce((sum, item) => sum + item.weight, 0);
-  const queue = [];
-  for (let i = 0; i < targetCount; i += 1) {
+  while (queue.length < targetCount) {
     let roll = Math.random() * totalWeight;
     let chosen = scored[0].test;
     for (const item of scored) {
@@ -354,8 +496,10 @@ function buildDailyPracticeQueue(targetCount) {
         break;
       }
     }
+    if (used.has(chosen.id)) continue;
     const question = generateQuestionForTest(chosen, "quiz");
     queue.push({ testId: chosen.id, question });
+    used.add(chosen.id);
   }
   return queue;
 }
@@ -603,15 +747,30 @@ function buildLearningQueue(trackId, count) {
     }
   });
 
-  const queue = [...inProgress, ...newConcepts.slice(0, LEARNING_SETTINGS.newPerSession)];
+  const srsSkill = category.generator && category.generator.type === "spiral_from_anchor" ? "write" : "general";
+  const dueConcepts = getDueSrsEntries(trackId, srsSkill)
+    .map((item) => item.conceptId)
+    .filter((conceptId) => sequence.includes(conceptId));
+
+  const queue = [];
+  const seen = new Set();
+  const addConcept = (conceptId) => {
+    if (!conceptId || seen.has(conceptId)) return;
+    seen.add(conceptId);
+    queue.push(conceptId);
+  };
+  dueConcepts.forEach(addConcept);
+  inProgress.forEach(addConcept);
+  newConcepts.slice(0, LEARNING_SETTINGS.newPerSession).forEach(addConcept);
+
   const reviewPool = mastered.length ? mastered : inProgress;
   let cursor = 0;
   while (queue.length < count) {
     if (!reviewPool.length) break;
-    queue.push(reviewPool[cursor % reviewPool.length]);
+    addConcept(reviewPool[cursor % reviewPool.length]);
     cursor += 1;
   }
-  if (!queue.length) queue.push(sequence[0]);
+  if (!queue.length) addConcept(sequence[0]);
 
   const questions = queue.map((conceptId) => buildLearningQuestion(category, conceptId, trackId));
   return { trackId, questions };
@@ -1026,6 +1185,7 @@ function updateTestListUi() {
     } else {
     visibleCategories.forEach((category) => {
       const progress = getCategoryProgress(category.id);
+      const freshness = getSrsSummary(category.id);
       const actionLabel = "Vjezba";
       const item = document.createElement("div");
       item.className = "test-category";
@@ -1037,6 +1197,7 @@ function updateTestListUi() {
               <div class="progress-fill" style="width: ${progress.percent}%"></div>
             </div>
           </div>
+          ${freshness ? `<div class="item-sub">Svjezina ${freshness.freshness}%</div>` : ""}
         </div>
         <div class="progress-score">${actionLabel}</div>
       `;
@@ -1876,6 +2037,10 @@ function handleAnswer(index) {
     state.learningSession.trackId
   ) {
     recordConceptResult(state.learningSession.trackId, state.currentQuestion.conceptId, correct);
+  }
+  const srsContext = getSrsContext(state.currentQuestion);
+  if (srsContext) {
+    recordSrsResult(srsContext.trackId, srsContext.skill, srsContext.conceptId, correct);
   }
   if (state.currentQuestionKey) {
     if (correct) {
