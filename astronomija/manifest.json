@@ -1,0 +1,17 @@
+{
+  "name": "Astro kviz – 5. razred",
+  "short_name": "Astro kviz",
+  "description": "Zabavni kviz za pripremu natjecanja iz astronomije",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#080b24",
+  "theme_color": "#080b24",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
